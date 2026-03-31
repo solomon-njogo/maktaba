@@ -1,12 +1,21 @@
 import "dotenv/config";
 import { Client } from "@notionhq/client";
-import { queryPagesToEnrich, extractIsbn, updatePageFromBook } from "./notion.js";
-import { fetchBookByIsbn } from "./googleBooks.js";
+import { enrichDatabaseOnce } from "./enrich.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
 const DATABASE_ID = process.env.NOTION_DATABASE_ID;
+
+const watchMode =
+  process.argv.includes("--watch") || process.env.MAKTABA_WATCH === "1";
+
+function parsePollIntervalMs(): number {
+  const raw = process.env.MAKTABA_POLL_INTERVAL_MS;
+  if (!raw) return 12_000;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 3_000 ? n : 12_000;
+}
 
 if (!NOTION_TOKEN) {
   console.error(
@@ -24,63 +33,48 @@ if (!DATABASE_ID) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+async function runWatch(notion: Client, databaseId: string): Promise<void> {
+  const intervalMs = parsePollIntervalMs();
+  console.log(
+    `[Maktaba] Watch mode — checking Notion every ${intervalMs / 1000}s. Add a row with ISBN only (leave Name empty); it will fill automatically. Ctrl+C to stop.\n`
+  );
+
+  let cycleRunning = false;
+
+  const tick = async (): Promise<void> => {
+    if (!cycleRunning) {
+      cycleRunning = true;
+      try {
+        const summary = await enrichDatabaseOnce(notion, databaseId, {
+          quietWhenEmpty: true,
+        });
+        if (summary.enriched > 0 || summary.failed > 0) {
+          console.log(
+            `[Maktaba] ${new Date().toISOString()}  enriched: ${summary.enriched}  skipped: ${summary.skipped}  failed: ${summary.failed}`
+          );
+        }
+      } catch (err) {
+        console.error("[Maktaba] Poll error:", err);
+      } finally {
+        cycleRunning = false;
+      }
+    }
+    setTimeout(() => void tick(), intervalMs);
+  };
+
+  await tick();
+}
+
 async function main(): Promise<void> {
   const notion = new Client({ auth: NOTION_TOKEN });
-
-  // Both env vars are validated before main() is called; assert non-null here.
   const databaseId = DATABASE_ID as string;
 
-  console.log(`[Maktaba] Querying database ${databaseId} for unenriched entries…`);
-
-  const pages = await queryPagesToEnrich(notion, databaseId);
-
-  if (pages.length === 0) {
-    console.log("[Maktaba] No pages to enrich. All done.");
+  if (watchMode) {
+    await runWatch(notion, databaseId);
     return;
   }
 
-  console.log(`[Maktaba] Found ${pages.length} page(s) to process.\n`);
-
-  let enriched = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const page of pages) {
-    const pageId = page.id;
-    const rawIsbn = extractIsbn(page);
-
-    if (!rawIsbn) {
-      console.warn(`[${pageId}] Could not read ISBN property — skipping.`);
-      skipped++;
-      continue;
-    }
-
-    console.log(`[${pageId}] ISBN: ${rawIsbn}`);
-
-    const book = await fetchBookByIsbn(rawIsbn);
-
-    if (!book) {
-      console.warn(`  → No book data found. Skipping update.\n`);
-      skipped++;
-      continue;
-    }
-
-    console.log(`  → Found: "${book.title}" by ${book.authors.join(", ") || "Unknown"}`);
-
-    try {
-      await updatePageFromBook(notion, pageId, book);
-      console.log(`  → Updated successfully.\n`);
-      enriched++;
-    } catch {
-      console.error(`  → Update failed. Moving on.\n`);
-      failed++;
-    }
-  }
-
-  console.log("─".repeat(50));
-  console.log(
-    `[Maktaba] Done.  Enriched: ${enriched}  |  Skipped: ${skipped}  |  Failed: ${failed}`
-  );
+  await enrichDatabaseOnce(notion, databaseId);
 }
 
 main().catch((err) => {

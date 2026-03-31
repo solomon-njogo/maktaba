@@ -76,23 +76,44 @@ export function extractIsbn(page: PageObjectResponse): string | null {
 
 // ─── Update page ──────────────────────────────────────────────────────────────
 
-const MAX_RICH_TEXT = 2000;
-
 /**
- * Updates a Notion page with metadata from Google Books.
- * Applies a 300ms delay after the update to respect Notion rate limits.
+ * Writes Google Books data into Name, Author, Genre (multi-select), Type (select), ISBN when the API returns one.
+ * Does not touch Status, Started, Completed, or Borrowed. 300ms delay after update for rate limits.
  */
 export async function updatePageFromBook(
   notion: Client,
   pageId: string,
   book: BookInfo
 ): Promise<void> {
-  const description =
-    book.description.length > MAX_RICH_TEXT
-      ? book.description.slice(0, MAX_RICH_TEXT - 1) + "…"
-      : book.description;
+  const authorText =
+    book.authors.length > 0 ? book.authors.join(", ") : "Unknown";
 
-  const authorText = book.authors.join(", ");
+  const properties: Parameters<Client["pages"]["update"]>[0]["properties"] = {
+    Name: {
+      title: [{ text: { content: book.title } }],
+    },
+    Author: {
+      rich_text: [{ text: { content: authorText } }],
+    },
+  };
+
+  if (book.genres.length > 0) {
+    properties.Genre = {
+      multi_select: book.genres.map((name) => ({ name })),
+    };
+  }
+
+  if (book.typeLabel) {
+    properties.Type = {
+      select: { name: book.typeLabel },
+    };
+  }
+
+  if (book.normalizedIsbnFromApi) {
+    properties.ISBN = {
+      rich_text: [{ text: { content: book.normalizedIsbnFromApi } }],
+    };
+  }
 
   try {
     await notion.pages.update({
@@ -100,17 +121,7 @@ export async function updatePageFromBook(
       icon: book.thumbnailUrl
         ? { type: "external", external: { url: book.thumbnailUrl } }
         : undefined,
-      properties: {
-        Name: {
-          title: [{ text: { content: book.title } }],
-        },
-        Author: {
-          rich_text: [{ text: { content: authorText } }],
-        },
-        Summary: {
-          rich_text: [{ text: { content: description } }],
-        },
-      },
+      properties,
     });
   } catch (err) {
     if (isNotionClientError(err)) {

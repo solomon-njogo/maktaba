@@ -3,11 +3,60 @@ import { normalizeIsbn } from "./isbn.js";
 
 const GOOGLE_BOOKS_URL = "https://www.googleapis.com/books/v1/volumes";
 
+const NOTION_SELECT_NAME_MAX = 100;
+
 export interface BookInfo {
   title: string;
   authors: string[];
-  description: string;
   thumbnailUrl: string | null;
+  /** Tags for Notion Genre (multi-select); from volume categories. */
+  genres: string[];
+  /** Label for Notion Type (select); from printType. */
+  typeLabel: string | null;
+  /** Normalized ISBN from volume metadata when available (else null). */
+  normalizedIsbnFromApi: string | null;
+}
+
+function clampSelectName(s: string): string {
+  const t = s.trim();
+  if (!t) return t;
+  return t.length <= NOTION_SELECT_NAME_MAX
+    ? t
+    : t.slice(0, NOTION_SELECT_NAME_MAX);
+}
+
+/** Split Google Books category strings into distinct genre tags for Notion. */
+function genresFromCategories(categories?: string[]): string[] {
+  if (!categories?.length) return [];
+  const tags = new Set<string>();
+  for (const c of categories) {
+    for (const part of c.split(/\s*[/&|,]+\s*/)) {
+      const name = clampSelectName(part);
+      if (name) tags.add(name);
+    }
+  }
+  return [...tags].slice(0, 10);
+}
+
+function typeLabelFromPrintType(printType?: string): string | null {
+  if (!printType) return null;
+  switch (printType) {
+    case "BOOK":
+      return "Book";
+    case "MAGAZINE":
+      return "Magazine";
+    default:
+      return clampSelectName(printType);
+  }
+}
+
+function pickNormalizedIsbnFromVolume(info: VolumeInfo): string | null {
+  const ids = info.industryIdentifiers;
+  if (!ids?.length) return null;
+  const isbn13 = ids.find((x) => x.type === "ISBN_13")?.identifier;
+  const isbn10 = ids.find((x) => x.type === "ISBN_10")?.identifier;
+  const raw = isbn13 ?? isbn10;
+  return raw ? normalizeIsbn(raw) : null;
 }
 
 /**
@@ -55,8 +104,10 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
     return {
       title: info.title ?? "",
       authors: info.authors ?? [],
-      description: info.description ?? "",
       thumbnailUrl,
+      genres: genresFromCategories(info.categories),
+      typeLabel: typeLabelFromPrintType(info.printType),
+      normalizedIsbnFromApi: pickNormalizedIsbnFromVolume(info),
     };
   } catch (err) {
     if (axios.isAxiosError(err)) {
@@ -84,6 +135,9 @@ interface VolumeInfo {
   title?: string;
   authors?: string[];
   description?: string;
+  categories?: string[];
+  printType?: string;
+  industryIdentifiers?: { type: string; identifier: string }[];
   imageLinks?: {
     thumbnail?: string;
   };

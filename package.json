@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "watch": "tsx src/index.ts --watch",
+    "start:watch": "node dist/index.js --watch"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
