@@ -117,3 +117,4 @@ src/
 | `@notionhq/client`   | Official Notion API client     |
 | `axios`              | HTTP client for Google Books   |
 | `dotenv`             | Loads `.env` configuration     |
+![1774999605770](image/README/1774999605770.png)
