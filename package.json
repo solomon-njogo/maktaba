@@ -1,0 +1,24 @@
+{
+  "name": "maktaba-isbn-enrichment",
+  "version": "1.0.0",
+  "description": "Monitors a Notion library database and enriches book entries from Google Books using ISBN.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
