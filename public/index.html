@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maktaba</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f4ef;
+        --fg: #1a1a18;
+        --muted: #5c5a55;
+        --accent: #2d5a4a;
+        --card: #fff;
+        --border: rgba(0, 0, 0, 0.08);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121210;
+          --fg: #eceae4;
+          --muted: #9c9890;
+          --accent: #7ab89a;
+          --card: #1c1c19;
+          --border: rgba(255, 255, 255, 0.08);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.55;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(1rem, 4vw, 2rem);
+      }
+      main {
+        width: min(40rem, 100%);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: clamp(1.25rem, 4vw, 2rem);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+      }
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: clamp(1.5rem, 4vw, 1.85rem);
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0 0 1rem;
+        color: var(--muted);
+        font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+      }
+      p:last-child {
+        margin-bottom: 0;
+      }
+      code {
+        font-size: 0.9em;
+        padding: 0.15em 0.4em;
+        border-radius: 6px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+      }
+      a {
+        color: var(--accent);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Maktaba</h1>
+      <p>
+        Notion library enrichment from ISBNs via the Google Books API. The app
+        runs as a <code>npm start</code> job (or a scheduled serverless/cron
+        hook)—not as this static page.
+      </p>
+      <p>
+        See the
+        <a href="https://github.com/solomon-njogo/maktaba">repository</a>
+        for setup and usage.
+      </p>
+    </main>
+  </body>
+</html>
