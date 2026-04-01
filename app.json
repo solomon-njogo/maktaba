@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cfbccd15-9835-4cea-a2cb-67c6313d0611"
+      }
+    },
+    "android": {
+      "package": "com.solomonnjogo.maktaba"
+    },
+    "ios": {
+      "bundleIdentifier": "com.solomonnjogo.maktaba",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
