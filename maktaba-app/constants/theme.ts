@@ -18,8 +18,8 @@ export const BrandFonts = {
   },
 } as const;
 
-const primary = '#c2652a'; // Sahara primary (burnt sienna)
-const tertiary = '#8c3c3c'; // Sahara tertiary (dusty rose)
+const primary = '#c2652a'; // Mkataba primary (burnt sienna)
+const tertiary = '#8c3c3c'; // Mkataba tertiary (dusty rose)
 
 const warmLinen = '#faf5ee';
 const warmInk = '#1f1a16';

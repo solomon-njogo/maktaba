@@ -30,7 +30,7 @@ export function Button({
   const t = useTokens();
 
   const isLink = variant === 'link';
-  const radius = isLink ? 0 : 8; // Sahara: 8px radius for buttons
+  const radius = isLink ? 0 : 8; // Mkataba: 8px radius for buttons
 
   return (
     <Pressable

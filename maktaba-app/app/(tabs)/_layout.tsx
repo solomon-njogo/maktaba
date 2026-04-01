@@ -74,7 +74,7 @@ export default function TabsLayout() {
             <View style={{ width: t.size.fab.wrapWidth, alignItems: 'center' }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Add book"
+                accessibilityLabel="Add books"
                 onPress={goAddBook}
                 style={({ pressed }) => [
                   {
