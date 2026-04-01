@@ -114,9 +114,16 @@ export default async function handler(
   }
 
   if (isVerificationHandshake) {
+    const token = body.verification_token as string;
+    // Notion does not show this in the browser; it only exists in this POST body.
+    // Open Vercel → your project → Logs (or the function’s log for this request) and copy the token below.
+    console.log(
+      "[webhook] Notion verification_token (paste into Notion → Webhooks → Verify):",
+      token
+    );
     sendJson(res, 200, {
       ok: true,
-      hint: "Paste verification_token in Notion → Integration → Webhooks → Verify",
+      hint: "Token was logged on the server (e.g. Vercel Logs). Paste it in Notion → Webhooks → Verify.",
     });
     return;
   }
