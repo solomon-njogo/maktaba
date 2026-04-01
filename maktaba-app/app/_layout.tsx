@@ -65,6 +65,20 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="add-book-scan"
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="add-book-isbn"
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
           name="book-detail"
           options={{
             presentation: 'card',
