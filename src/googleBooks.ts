@@ -5,6 +5,26 @@ const GOOGLE_BOOKS_URL = "https://www.googleapis.com/books/v1/volumes";
 
 const NOTION_SELECT_NAME_MAX = 100;
 
+const GOOGLE_BOOKS_MAX_ATTEMPTS = 5;
+const GOOGLE_BOOKS_BASE_BACKOFF_MS = 1_500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Parse Retry-After: seconds (number) or HTTP-date. Returns ms to wait, or null. */
+function retryAfterMs(header: string | undefined): number | null {
+  if (!header?.trim()) return null;
+  const sec = Number(header);
+  if (!Number.isNaN(sec) && sec >= 0) return Math.min(sec * 1000, 120_000);
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) {
+    const delta = date - Date.now();
+    return delta > 0 ? Math.min(delta, 120_000) : null;
+  }
+  return null;
+}
+
 export interface BookInfo {
   title: string;
   authors: string[];
@@ -91,51 +111,76 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
     return null;
   }
 
-  try {
-    const params: Record<string, string> = { q: `isbn:${isbn}` };
-
-    const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
-    if (apiKey) {
-      params.key = apiKey;
-    }
-
-    const response = await axios.get<GoogleBooksResponse>(GOOGLE_BOOKS_URL, {
-      params,
-      timeout: 10_000,
-    });
-
-    const items = response.data.items;
-    if (!items || items.length === 0) {
-      console.warn(`  [GoogleBooks] No results for ISBN: ${isbn}`);
-      return null;
-    }
-
-    const info = items[0].volumeInfo;
-
-    const thumbRaw =
-      info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail ?? null;
-    const thumbnailUrl = thumbRaw ? toHttps(thumbRaw) : null;
-    const coverUrl = thumbRaw ? googleBooksCoverUrlFromRaw(thumbRaw) : null;
-
-    return {
-      title: info.title ?? "",
-      authors: info.authors ?? [],
-      thumbnailUrl,
-      coverUrl,
-      genres: genresFromCategories(info.categories),
-      typeLabel: typeLabelFromPrintType(info.printType),
-      normalizedIsbnFromApi: pickNormalizedIsbnFromVolume(info),
-    };
-  } catch (err) {
-    if (axios.isAxiosError(err)) {
-      console.error(
-        `  [GoogleBooks] HTTP error for ISBN ${isbn}: ${err.response?.status ?? err.message}`
-      );
-    } else {
-      console.error(`  [GoogleBooks] Unexpected error for ISBN ${isbn}:`, err);
-    }
-    return null;
+  const params: Record<string, string> = { q: `isbn:${isbn}` };
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
+  if (apiKey) {
+    params.key = apiKey;
   }
+
+  for (let attempt = 1; attempt <= GOOGLE_BOOKS_MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await axios.get<GoogleBooksResponse>(GOOGLE_BOOKS_URL, {
+        params,
+        timeout: 10_000,
+      });
+
+      const items = response.data.items;
+      if (!items || items.length === 0) {
+        console.warn(`  [GoogleBooks] No results for ISBN: ${isbn}`);
+        return null;
+      }
+
+      const info = items[0].volumeInfo;
+
+      const thumbRaw =
+        info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail ?? null;
+      const thumbnailUrl = thumbRaw ? toHttps(thumbRaw) : null;
+      const coverUrl = thumbRaw ? googleBooksCoverUrlFromRaw(thumbRaw) : null;
+
+      return {
+        title: info.title ?? "",
+        authors: info.authors ?? [],
+        thumbnailUrl,
+        coverUrl,
+        genres: genresFromCategories(info.categories),
+        typeLabel: typeLabelFromPrintType(info.printType),
+        normalizedIsbnFromApi: pickNormalizedIsbnFromVolume(info),
+      };
+    } catch (err) {
+      if (!axios.isAxiosError(err)) {
+        console.error(`  [GoogleBooks] Unexpected error for ISBN ${isbn}:`, err);
+        return null;
+      }
+
+      const status = err.response?.status;
+      const retryable =
+        status === 429 ||
+        status === 503 ||
+        status === 502 ||
+        (status !== undefined && status >= 500);
+
+      if (!retryable || attempt === GOOGLE_BOOKS_MAX_ATTEMPTS) {
+        console.error(
+          `  [GoogleBooks] HTTP error for ISBN ${isbn}: ${status ?? err.message}`
+        );
+        return null;
+      }
+
+      const retryAfterHeader = err.response?.headers?.["retry-after"];
+      const fromHeader = retryAfterMs(
+        typeof retryAfterHeader === "string" ? retryAfterHeader : undefined
+      );
+      const backoff =
+        fromHeader ??
+        Math.min(GOOGLE_BOOKS_BASE_BACKOFF_MS * 2 ** (attempt - 1), 30_000);
+      console.warn(
+        `  [GoogleBooks] ${status} for ISBN ${isbn} — retry ${attempt}/${GOOGLE_BOOKS_MAX_ATTEMPTS} in ${Math.round(backoff / 1000)}s`
+      );
+      await sleep(backoff);
+    }
+  }
+
+  return null;
 }
 
 // ─── Google Books API response shape (minimal) ───────────────────────────────
