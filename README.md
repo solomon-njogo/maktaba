@@ -110,6 +110,20 @@ src/
 
 ---
 
+## Maktaba App (UI) Design System — Sahara
+
+The Expo app lives in `maktaba-app/` and follows **Sahara — Warm Minimalism**.
+
+- **Theme tokens**: `maktaba-app/constants/theme.ts` (warm palette) and `maktaba-app/hooks/use-tokens.ts` (responsive spacing/type)
+- **Typography**: headings = **EB Garamond**, body/labels = **Manrope** (loaded in `maktaba-app/app/_layout.tsx`)
+- **Use primitives (avoid inline styles)**:
+  - `maktaba-app/components/ThemedText.tsx`
+  - `maktaba-app/components/Button.tsx`
+  - `maktaba-app/components/Card.tsx`
+  - `maktaba-app/components/TextField.tsx`
+
+---
+
 ## Dependencies
 
 | Package              | Purpose                        |

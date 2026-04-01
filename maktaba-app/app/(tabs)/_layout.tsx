@@ -1,121 +1,113 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Tabs, router } from 'expo-router';
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useMemo } from 'react';
+import { Platform, Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 
-import { HapticTab } from '@/components/haptic-tab';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
 
-function CenterAddButton() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const bg = Colors[colorScheme].primary;
-  const c = Colors[colorScheme];
+export default function TabsLayout() {
+  const scheme = useColorScheme() ?? 'light';
+  const c = Colors[scheme];
   const t = useTokens();
+  const router = useRouter();
 
-  return (
-    <View style={[styles.centerWrap, { width: t.size.fab.wrapWidth, alignItems: 'center' }]} pointerEvents="box-none">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add"
-        onPress={() => router.push('/add-actions')}
-        style={({ pressed }) => [
-          styles.centerBtn,
-          {
-            backgroundColor: bg,
-            width: t.size.fab.size,
-            height: t.size.fab.size,
-            marginTop: -t.size.fab.lift,
-            borderRadius: t.size.fab.size / 2,
-            shadowColor: c.shadow,
-            shadowOpacity: 0.15,
-            shadowRadius: t.space.xl,
-            shadowOffset: { width: 0, height: t.space.l },
-            elevation: t.space.m,
-          },
-          pressed && { opacity: 0.9 },
-        ]}>
-        <MaterialIcons name="add" size={t.size.fab.icon} color={c.onPrimary} />
-      </Pressable>
-    </View>
+  const commonTabBarStyle = useMemo(
+    () => ({
+      height: t.platform.tabBarHeight,
+      paddingTop: t.size.tabBar.padTop,
+      paddingBottom: t.platform.tabBarPadBottom,
+      backgroundColor: c.card,
+      borderTopColor: c.border,
+      borderTopWidth: Platform.select({ ios: 0.5, default: 1 }),
+    }),
+    [c.border, c.card, t.platform.tabBarHeight, t.platform.tabBarPadBottom, t.size.tabBar.padTop]
   );
-}
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const scheme = colorScheme ?? 'light';
-  const t = useTokens();
+  const goAddBook = async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // no-op (web/simulator)
+    }
+    router.push('/add-book');
+  };
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[scheme].primary,
-        tabBarInactiveTintColor: Colors[scheme].tabIconDefault,
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            backgroundColor: Colors[scheme].background,
-            borderTopColor: Colors[scheme].border,
-            height: t.platform.tabBarHeight,
-            paddingTop: t.size.tabBar.padTop,
-            paddingBottom: t.platform.tabBarPadBottom,
-          },
-        ],
-      }}>
+        tabBarStyle: commonTabBarStyle,
+        tabBarActiveTintColor: c.tabIconSelected,
+        tabBarInactiveTintColor: c.tabIconDefault,
+        tabBarLabelStyle: {
+          fontSize: t.typography.size.xs,
+          lineHeight: Math.round(t.typography.size.xs * 1.25),
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <MaterialIcons name="home" size={26} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="books"
-        options={{
-          title: 'My books',
-          tabBarIcon: ({ color }) => <MaterialIcons name="menu-book" size={24} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
         }}
       />
 
       <Tabs.Screen
-        name="add-placeholder"
+        name="my-books"
+        options={{
+          title: 'My Books',
+          tabBarIcon: ({ color, size }) => <Ionicons name="library-outline" color={color} size={size} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="add"
         options={{
           title: '',
-          tabBarButton: () => <CenterAddButton />,
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: () => (
+            <View style={{ width: t.size.fab.wrapWidth, alignItems: 'center' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add book"
+                onPress={goAddBook}
+                style={({ pressed }) => [
+                  {
+                    width: t.size.fab.size,
+                    height: t.size.fab.size,
+                    borderRadius: t.radius.pill,
+                    backgroundColor: c.primary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [{ translateY: -t.size.fab.lift }, { scale: pressed ? 0.98 : 1 }],
+                    shadowColor: c.shadow,
+                    shadowOpacity: scheme === 'dark' ? 0.42 : 0.24,
+                    shadowRadius: 14,
+                    shadowOffset: { width: 0, height: 10 },
+                    elevation: 10,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={t.size.fab.icon} color={c.onPrimary} />
+              </Pressable>
+            </View>
+          ),
         }}
       />
 
       <Tabs.Screen
-        name="calendar"
+        name="my-info"
         options={{
-          title: 'Calendar',
-          tabBarIcon: ({ color }) => <MaterialIcons name="calendar-month" size={24} color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="info"
-        options={{
-          title: 'My info',
-          tabBarIcon: ({ color }) => <MaterialIcons name="person-outline" size={26} color={color} />,
+          title: 'My Info',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} />,
         }}
       />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
-    borderTopWidth: 1,
-  },
-  centerWrap: {
-    position: 'relative',
-  },
-  centerBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

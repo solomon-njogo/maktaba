@@ -7,18 +7,18 @@ export const Shadows = {
     Platform.select<ViewStyle>({
       ios: {
         shadowColor: Colors[scheme].shadow,
-        shadowOpacity: 0.08,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 2 },
       },
       android: {
-        elevation: 3,
+        elevation: 1,
       },
       default: {
         shadowColor: Colors[scheme].shadow,
-        shadowOpacity: 0.08,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 2 },
       },
     }),
 } as const;
