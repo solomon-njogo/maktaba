@@ -63,9 +63,27 @@ export default async function handler(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
+  // Browsers use GET; Notion webhooks use POST only.
+  if (req.method === "HEAD") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end();
+    return;
+  }
+
+  if (req.method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      service: "Maktaba Notion webhook",
+      message:
+        "This URL accepts POST requests from Notion only. Configure it under your integration → Webhooks. Visiting in a browser sends GET, which does not trigger enrichment.",
+    });
+    return;
+  }
+
   if (req.method !== "POST") {
     res.statusCode = 405;
-    res.setHeader("Allow", "POST");
+    res.setHeader("Allow", "GET, HEAD, POST");
     res.end("Method Not Allowed");
     return;
   }
