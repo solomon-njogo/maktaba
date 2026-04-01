@@ -1,4 +1,4 @@
-import { StyleSheet, Text, type TextProps } from 'react-native';
+import { Text, type TextProps } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -57,10 +57,4 @@ export function ThemedText({
   );
 }
 
-const styles = StyleSheet.create({
-  default: {},
-  defaultSemiBold: {},
-  title: {},
-  subtitle: {},
-  link: {},
-});
+// token-driven styling lives in component

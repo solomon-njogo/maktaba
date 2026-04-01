@@ -61,7 +61,17 @@ export default function AddActionsModal() {
           {ACTIONS.map((a) => (
             <Pressable
               key={a.title}
-              onPress={() => router.back()}
+              onPress={() => {
+                if (a.title === 'Scan Barcode') {
+                  router.replace('/book-lookup/scan');
+                  return;
+                }
+                if (a.title === 'Add manually') {
+                  router.replace('/book-lookup/manual');
+                  return;
+                }
+                router.back();
+              }}
               style={({ pressed }) => [
                 styles.action,
                 {
