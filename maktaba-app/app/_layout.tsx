@@ -4,6 +4,8 @@ import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 
+import { initLocalDb } from '@/lib/db/init';
+
 import {
   EBGaramond_400Regular,
   EBGaramond_500Medium,
@@ -28,7 +30,20 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
+    if (!loaded) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await initLocalDb();
+      } finally {
+        if (!cancelled) SplashScreen.hideAsync();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loaded]);
 
   if (!loaded) return null;

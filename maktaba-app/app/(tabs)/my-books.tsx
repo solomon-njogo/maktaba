@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, TextInput, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
 
 import { Card } from '@/components/Card';
 import { ThemedText } from '@/components/ThemedText';
@@ -9,6 +11,7 @@ import { AppName } from '@/components/AppName';
 import { BrandFonts, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
+import { listBooks } from '@/lib/db/books';
 
 export default function MyBooksScreen() {
   const scheme = useColorScheme() ?? 'light';
@@ -19,6 +22,19 @@ export default function MyBooksScreen() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'inProgress' | 'finished' | 'dropped'>('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'list' | 'grid'>('list');
+  const [books, setBooks] = useState<
+    {
+      id: string;
+      coverUri: string | null;
+      author: string | null;
+      title: string;
+      isbn: string | null;
+      pages: number | null;
+      status: string;
+      updatedAt: number;
+    }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
 
   const filters = useMemo(
     () =>
@@ -32,12 +48,55 @@ export default function MyBooksScreen() {
     []
   );
 
-  /**
-   * Data gets wired in later (store/api). Keep screen UI ready without hard-coded fake content.
-   * Replace this with your real library list when available.
-   */
-  const books = useMemo<unknown[]>(() => [], []);
-  const displayedBooks = books;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await listBooks();
+      // drizzle types can be loose at runtime; normalize the fields we render
+      setBooks(
+        rows.map((r: any) => ({
+          id: String(r.id),
+          coverUri: (r.coverUri ?? null) as string | null,
+          author: (r.author ?? null) as string | null,
+          title: String(r.title),
+          isbn: (r.isbn ?? null) as string | null,
+          pages: (typeof r.pages === 'number' ? r.pages : r.pages == null ? null : Number(r.pages)) as number | null,
+          status: String(r.status ?? 'tbr'),
+          updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Number(r.updatedAt ?? Date.now()),
+        }))
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
+  const displayedBooks = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let out = books;
+    if (q) {
+      out = out.filter((b) => (b.title ?? '').toLowerCase().includes(q) || (b.author ?? '').toLowerCase().includes(q) || (b.isbn ?? '').includes(q));
+    }
+
+    // Placeholder mapping for your existing filter UI (until you implement real reading statuses)
+    if (activeFilter !== 'all') {
+      const statusMap: Record<Exclude<typeof activeFilter, 'all'>, string> = {
+        unread: 'tbr',
+        inProgress: 'reading',
+        finished: 'read',
+        dropped: 'dropped',
+      };
+      const desired = statusMap[activeFilter];
+      out = out.filter((b) => b.status === desired);
+    }
+
+    return out;
+  }, [activeFilter, books, query]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
@@ -85,7 +144,7 @@ export default function MyBooksScreen() {
                 {displayedBooks.length} book
               </ThemedText>
               <ThemedText tone="muted" style={{ maxWidth: 220 }}>
-                Your curated collection
+                {loading ? 'Loading…' : 'Your curated collection'}
               </ThemedText>
             </View>
 
@@ -210,8 +269,61 @@ export default function MyBooksScreen() {
           </Pressable>
         </View>
 
-        {/* Books list renders once real data is wired in. */}
-        {displayedBooks.length ? null : null}
+        {/* Books list */}
+        {displayedBooks.length ? (
+          <View style={{ gap: t.space.m }}>
+            {displayedBooks.map((b) => {
+              const coverW = view === 'grid' ? 140 : 62;
+              const coverH = view === 'grid' ? 190 : 86;
+
+              return (
+                <Card key={b.id} padded={false} style={{ overflow: 'hidden' }}>
+                  <View style={{ padding: t.space.l, flexDirection: view === 'grid' ? 'column' : 'row', gap: t.space.l }}>
+                    <View
+                      style={{
+                        width: coverW,
+                        height: coverH,
+                        borderRadius: 12,
+                        backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(31, 26, 22, 0.06)',
+                        borderWidth: 1,
+                        borderColor: c.border,
+                        overflow: 'hidden',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {b.coverUri ? (
+                        <Image source={{ uri: b.coverUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} />
+                      ) : (
+                        <Ionicons name="book-outline" size={24} color={c.icon} />
+                      )}
+                    </View>
+
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <ThemedText variant="title" numberOfLines={2}>
+                        {b.title}
+                      </ThemedText>
+                      <ThemedText tone="muted" numberOfLines={1}>
+                        {b.author ?? 'Unknown author'}
+                      </ThemedText>
+                      <ThemedText variant="caption" tone="muted">
+                        {b.isbn ? `ISBN: ${b.isbn}` : ''}
+                        {b.pages ? `  ·  ${b.pages} pages` : ''}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        ) : (
+          <Card>
+            <View style={{ gap: 6 }}>
+              <ThemedText variant="title">No books yet</ThemedText>
+              <ThemedText tone="muted">Add your first book by scanning the ISBN or typing it in.</ThemedText>
+            </View>
+          </Card>
+        )}
 
         <Pressable
           accessibilityRole="button"
