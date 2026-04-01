@@ -62,7 +62,6 @@ export default function TabLayout() {
         name="add-placeholder"
         options={{
           title: '',
-          href: null,
           tabBarButton: () => <CenterAddButton />,
         }}
       />
