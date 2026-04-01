@@ -36,7 +36,7 @@ if (!DATABASE_ID) {
 async function runWatch(notion: Client, databaseId: string): Promise<void> {
   const intervalMs = parsePollIntervalMs();
   console.log(
-    `[Maktaba] Watch mode — checking Notion every ${intervalMs / 1000}s. Add a row with ISBN only (leave Name empty); it will fill automatically. Ctrl+C to stop.\n`
+    `[Maktaba] Watch mode — checking Notion every ${intervalMs / 1000}s. Rows with ISBN are filled or corrected from Google Books when they differ. Ctrl+C to stop.\n`
   );
 
   let cycleRunning = false;

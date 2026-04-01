@@ -8,7 +8,10 @@ const NOTION_SELECT_NAME_MAX = 100;
 export interface BookInfo {
   title: string;
   authors: string[];
+  /** Small image; used for Notion page icon. */
   thumbnailUrl: string | null;
+  /** Larger banner-friendly URL for Notion page cover (Google Books `zoom=0` when applicable). */
+  coverUrl: string | null;
   /** Tags for Notion Genre (multi-select); from volume categories. */
   genres: string[];
   /** Label for Notion Type (select); from printType. */
@@ -48,6 +51,19 @@ function typeLabelFromPrintType(printType?: string): string | null {
     default:
       return clampSelectName(printType);
   }
+}
+
+function toHttps(url: string): string {
+  return url.replace(/^http:\/\//i, "https://");
+}
+
+/** Prefer higher resolution for Notion cover (Google uses `zoom=` in many image URLs). */
+function googleBooksCoverUrlFromRaw(raw: string): string {
+  const https = toHttps(raw);
+  if (/zoom=\d+/i.test(https)) {
+    return https.replace(/zoom=\d+/i, "zoom=0");
+  }
+  return https;
 }
 
 function pickNormalizedIsbnFromVolume(info: VolumeInfo): string | null {
@@ -96,15 +112,16 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
 
     const info = items[0].volumeInfo;
 
-    const rawThumbnail = info.imageLinks?.thumbnail ?? null;
-    const thumbnailUrl = rawThumbnail
-      ? rawThumbnail.replace(/^http:\/\//, "https://")
-      : null;
+    const thumbRaw =
+      info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail ?? null;
+    const thumbnailUrl = thumbRaw ? toHttps(thumbRaw) : null;
+    const coverUrl = thumbRaw ? googleBooksCoverUrlFromRaw(thumbRaw) : null;
 
     return {
       title: info.title ?? "",
       authors: info.authors ?? [],
       thumbnailUrl,
+      coverUrl,
       genres: genresFromCategories(info.categories),
       typeLabel: typeLabelFromPrintType(info.printType),
       normalizedIsbnFromApi: pickNormalizedIsbnFromVolume(info),
@@ -139,6 +156,7 @@ interface VolumeInfo {
   printType?: string;
   industryIdentifiers?: { type: string; identifier: string }[];
   imageLinks?: {
+    smallThumbnail?: string;
     thumbnail?: string;
   };
 }

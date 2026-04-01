@@ -4,6 +4,7 @@ import type {
   QueryDatabaseParameters,
 } from "@notionhq/client/build/src/api-endpoints.js";
 import type { BookInfo } from "./googleBooks.js";
+import { normalizeIsbn } from "./isbn.js";
 
 const DELAY_MS = 300;
 
@@ -14,9 +15,8 @@ function delay(ms: number): Promise<void> {
 // ─── Query ────────────────────────────────────────────────────────────────────
 
 /**
- * Returns all pages in the given database where:
- *   - ISBN (rich text) is not empty
- *   - Name / Title is empty
+ * Returns all pages in the given database where ISBN (rich text) is not empty.
+ * Rows are compared to Google Books; updates run when metadata differs or fields are empty.
  *
  * Handles Notion's cursor-based pagination automatically.
  */
@@ -28,16 +28,8 @@ export async function queryPagesToEnrich(
   let cursor: string | undefined = undefined;
 
   const filter: QueryDatabaseParameters["filter"] = {
-    and: [
-      {
-        property: "ISBN",
-        rich_text: { is_not_empty: true },
-      },
-      {
-        property: "Name",
-        title: { is_empty: true },
-      },
-    ],
+    property: "ISBN",
+    rich_text: { is_not_empty: true },
   };
 
   do {
@@ -74,10 +66,103 @@ export function extractIsbn(page: PageObjectResponse): string | null {
   return text.length > 0 ? text : null;
 }
 
+function getTitlePlain(page: PageObjectResponse): string {
+  const prop = page.properties["Name"];
+  if (!prop || prop.type !== "title") return "";
+  return prop.title?.map((t) => t.plain_text).join("") ?? "";
+}
+
+function getAuthorPlain(page: PageObjectResponse): string {
+  const prop = page.properties["Author"];
+  if (!prop || prop.type !== "rich_text") return "";
+  return prop.rich_text.map((rt) => rt.plain_text).join("").trim();
+}
+
+function getGenreNames(page: PageObjectResponse): string[] {
+  const prop = page.properties["Genre"];
+  if (!prop || prop.type !== "multi_select") return [];
+  return prop.multi_select.map((m) => m.name);
+}
+
+function getTypeName(page: PageObjectResponse): string | null {
+  const prop = page.properties["Type"];
+  if (!prop || prop.type !== "select") return null;
+  return prop.select?.name ?? null;
+}
+
+function normCompareText(s: string): string {
+  return s.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeComparableImageUrl(url: string): string {
+  const u = url.trim().replace(/^http:\/\//i, "https://");
+  return u.replace(/zoom=\d+/gi, "zoom=0");
+}
+
+/**
+ * True when the page has no external cover or it does not match the API image.
+ * Skips when Notion stores the cover as `file` (signed URLs would thrash on every poll).
+ */
+function coverNeedsSyncFromBook(
+  page: PageObjectResponse,
+  coverUrl: string | null
+): boolean {
+  if (!coverUrl) return false;
+  const c = page.cover;
+  if (!c) return true;
+  if (c.type === "file") return false;
+  if (c.type === "external") {
+    return (
+      normalizeComparableImageUrl(c.external.url) !==
+      normalizeComparableImageUrl(coverUrl)
+    );
+  }
+  return true;
+}
+
+/**
+ * True when visible book fields on the page differ from what the API would write
+ * (title, author, genres, type, normalized ISBN when the API provides one, cover image).
+ */
+export function pageMetadataDiffersFromBook(
+  page: PageObjectResponse,
+  book: BookInfo
+): boolean {
+  if (normCompareText(getTitlePlain(page)) !== normCompareText(book.title)) {
+    return true;
+  }
+
+  const authorExpected =
+    book.authors.length > 0 ? book.authors.join(", ") : "Unknown";
+  if (normCompareText(getAuthorPlain(page)) !== normCompareText(authorExpected)) {
+    return true;
+  }
+
+  const genresPage = [...getGenreNames(page)].map(normCompareText).sort().join("\u0001");
+  const genresBook = [...book.genres].map(normCompareText).sort().join("\u0001");
+  if (genresPage !== genresBook) return true;
+
+  const typePage = getTypeName(page);
+  const typeBook = book.typeLabel;
+  const tPage = typePage ? normCompareText(typePage) : "";
+  const tBook = typeBook ? normCompareText(typeBook) : "";
+  if (tPage !== tBook) return true;
+
+  const rawIsbn = extractIsbn(page);
+  const pageIsbnNorm = rawIsbn ? normalizeIsbn(rawIsbn) : null;
+  const apiIsbn = book.normalizedIsbnFromApi;
+  if (apiIsbn && pageIsbnNorm !== apiIsbn) return true;
+
+  if (coverNeedsSyncFromBook(page, book.coverUrl)) return true;
+
+  return false;
+}
+
 // ─── Update page ──────────────────────────────────────────────────────────────
 
 /**
  * Writes Google Books data into Name, Author, Genre (multi-select), Type (select), ISBN when the API returns one.
+ * Sets page icon and cover from API image URLs when available.
  * Does not touch Status, Started, Completed, or Borrowed. 300ms delay after update for rate limits.
  */
 export async function updatePageFromBook(
@@ -97,17 +182,13 @@ export async function updatePageFromBook(
     },
   };
 
-  if (book.genres.length > 0) {
-    properties.Genre = {
-      multi_select: book.genres.map((name) => ({ name })),
-    };
-  }
+  properties.Genre = {
+    multi_select: book.genres.map((name) => ({ name })),
+  };
 
-  if (book.typeLabel) {
-    properties.Type = {
-      select: { name: book.typeLabel },
-    };
-  }
+  properties.Type = book.typeLabel
+    ? { select: { name: book.typeLabel } }
+    : { select: null };
 
   if (book.normalizedIsbnFromApi) {
     properties.ISBN = {
@@ -120,6 +201,9 @@ export async function updatePageFromBook(
       page_id: pageId,
       icon: book.thumbnailUrl
         ? { type: "external", external: { url: book.thumbnailUrl } }
+        : undefined,
+      cover: book.coverUrl
+        ? { type: "external", external: { url: book.coverUrl } }
         : undefined,
       properties,
     });

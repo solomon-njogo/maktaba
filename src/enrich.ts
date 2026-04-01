@@ -1,17 +1,14 @@
 import { type Client, isFullPage } from "@notionhq/client";
-import { queryPagesToEnrich, extractIsbn, updatePageFromBook } from "./notion.js";
+import {
+  queryPagesToEnrich,
+  extractIsbn,
+  updatePageFromBook,
+  pageMetadataDiffersFromBook,
+} from "./notion.js";
 import { fetchBookByIsbn } from "./googleBooks.js";
 
 function normalizeNotionId(id: string): string {
   return id.replace(/-/g, "").toLowerCase();
-}
-
-function isNameEmptyProperty(page: { properties: Record<string, unknown> }): boolean {
-  const prop = page.properties["Name"];
-  if (!prop || typeof prop !== "object" || !("type" in prop)) return true;
-  const p = prop as { type: string; title?: { plain_text: string }[] };
-  if (p.type !== "title") return true;
-  return !p.title?.some((t) => t.plain_text.trim().length > 0);
 }
 
 export type TryEnrichPageResult =
@@ -21,8 +18,8 @@ export type TryEnrichPageResult =
   | "not_applicable";
 
 /**
- * Fetches one page by id. If it belongs to databaseId, has ISBN, and Name is empty,
- * looks up Google Books and updates the row.
+ * Fetches one page by id. If it belongs to databaseId and has ISBN,
+ * looks up Google Books and updates the row when metadata differs from the API.
  */
 export async function tryEnrichPageById(
   notion: Client,
@@ -40,13 +37,13 @@ export async function tryEnrichPageById(
     return "not_applicable";
   }
 
-  if (!isNameEmptyProperty(page)) return "not_applicable";
-
   const rawIsbn = extractIsbn(page);
   if (!rawIsbn) return "skipped";
 
   const book = await fetchBookByIsbn(rawIsbn);
   if (!book) return "skipped";
+
+  if (!pageMetadataDiffersFromBook(page, book)) return "skipped";
 
   try {
     await updatePageFromBook(notion, pageId, book);
@@ -63,7 +60,7 @@ export interface EnrichSummary {
 }
 
 /**
- * One pass: find pages with ISBN set and empty Name, fetch from Google Books, update Notion.
+ * One pass: find pages with ISBN set, fetch from Google Books, update when data differs.
  */
 export async function enrichDatabaseOnce(
   notion: Client,
@@ -74,7 +71,7 @@ export async function enrichDatabaseOnce(
 
   if (!quietWhenEmpty) {
     console.log(
-      `[Maktaba] Querying database ${databaseId} for unenriched entries…`
+      `[Maktaba] Querying database ${databaseId} for rows with ISBN (sync if needed)…`
     );
   }
 
@@ -118,6 +115,12 @@ export async function enrichDatabaseOnce(
     console.log(
       `  → Found: "${book.title}" by ${book.authors.join(", ") || "Unknown"}`
     );
+
+    if (!pageMetadataDiffersFromBook(page, book)) {
+      console.log(`  → Already matches API. Skipping.\n`);
+      skipped++;
+      continue;
+    }
 
     try {
       await updatePageFromBook(notion, pageId, book);
