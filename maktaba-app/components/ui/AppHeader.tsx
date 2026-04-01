@@ -1,9 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { PropsWithChildren, ReactNode } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTokens } from '@/hooks/use-tokens';
 
 export function AppHeader({
   title,
@@ -19,26 +20,59 @@ export function AppHeader({
 }>) {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
+  const t = useTokens();
   const { width } = useWindowDimensions();
-  const headerH = Math.max(160, Math.min(220, width * 0.48));
+  const headerH = Math.max(t.size.header.minHeight, Math.min(t.size.header.maxHeight, width * t.size.header.heightWidthRatio));
 
   return (
     <View style={[styles.wrap, { height: headerH, backgroundColor: c.primary }]}>
-      <View style={styles.content}>
-        <View style={styles.row}>
-          <View style={styles.left}>
-            {leftVisual ?? <MaterialIcons name="auto-stories" size={38} color="#fff" />}
+      <View style={[styles.content, { paddingTop: t.platform.headerPadTop, paddingHorizontal: t.size.header.contentPadX }]}>
+        <View style={[styles.row, { gap: t.size.header.rowGap }]}>
+          <View
+            style={[
+              styles.left,
+              {
+                width: t.size.header.sideSlot,
+                height: t.size.header.sideSlot,
+                borderRadius: t.size.header.sideSlotRadius,
+                backgroundColor: c.onPrimaryOverlay,
+              },
+            ]}>
+            {leftVisual ?? <MaterialIcons name="auto-stories" size={t.size.icon.headerLeft} color={c.onPrimary} />}
           </View>
-          <View style={styles.center}>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          <View style={[styles.center, { gap: t.size.header.centerGap }]}>
+            <Text
+              style={[
+                styles.title,
+                { color: c.onPrimary, fontSize: t.typography.size.headerTitle, fontWeight: t.typography.weight.extraBold, lineHeight: t.typography.lineHeight.headerTitle },
+              ]}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { color: c.onPrimaryMuted, fontSize: t.typography.size.l, fontWeight: t.typography.weight.semiBold }]}>
+                {subtitle}
+              </Text>
+            ) : null}
           </View>
-          <View style={styles.right}>{rightVisual}</View>
+          <View style={[styles.right, { width: t.size.header.sideSlot }]}>{rightVisual}</View>
         </View>
         {children}
       </View>
 
-      <View style={[styles.curve, { backgroundColor: c.background }]} />
+      <View
+        style={[
+          styles.curve,
+          {
+            backgroundColor: c.background,
+            left: -t.size.header.curveLeftRight,
+            right: -t.size.header.curveLeftRight,
+            bottom: -t.size.header.curveBottom,
+            height: t.size.header.curveHeight,
+            borderTopLeftRadius: t.size.header.curveRadius,
+            borderTopRightRadius: t.size.header.curveRadius,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -49,48 +83,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: {
-    paddingTop: Platform.select({ ios: 54, default: 44 }),
-    paddingHorizontal: 18,
+    // token-driven in component
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   left: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   center: {
     flex: 1,
-    gap: 2,
   },
   right: {
-    width: 48,
     alignItems: 'flex-end',
   },
   title: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
+    // token-driven in component
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
-    fontWeight: '600',
+    // token-driven in component
   },
   curve: {
     position: 'absolute',
-    left: -120,
-    right: -120,
-    bottom: -140,
-    height: 220,
-    borderTopLeftRadius: 280,
-    borderTopRightRadius: 280,
+    // token-driven in component
   },
 });
 

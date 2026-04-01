@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTokens } from '@/hooks/use-tokens';
 
 export function StatRow({
   icon,
@@ -18,15 +19,24 @@ export function StatRow({
 }) {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
+  const t = useTokens();
 
   return (
-    <View style={styles.row}>
-      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-        <MaterialIcons name={icon} size={18} color="#fff" />
+    <View style={[styles.row, { gap: t.space.s }]}>
+      <View
+        style={[
+          styles.iconWrap,
+          { backgroundColor: iconBg, width: t.size.icon.jumbo, height: t.size.icon.jumbo, borderRadius: t.radius.s },
+        ]}>
+        <MaterialIcons name={icon} size={t.size.icon.m} color={c.onPrimary} />
       </View>
-      <View style={styles.textWrap}>
-        <Text style={[styles.value, { color: c.text }]}>{value}</Text>
-        <Text style={[styles.label, { color: c.mutedText }]}>{label}</Text>
+      <View style={[styles.textWrap, { gap: t.space.xs }]}>
+        <Text style={[styles.value, { color: c.text, fontSize: t.typography.size.xl, fontWeight: t.typography.weight.extraBold }]}>
+          {value}
+        </Text>
+        <Text style={[styles.label, { color: c.mutedText, fontSize: t.typography.size.m, fontWeight: t.typography.weight.semiBold }]}>
+          {label}
+        </Text>
       </View>
     </View>
   );
@@ -36,25 +46,18 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   textWrap: {
-    gap: 2,
   },
   value: {
-    fontWeight: '800',
-    fontSize: 14,
+    // token-driven in component
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
+    // token-driven in component
   },
 });
 

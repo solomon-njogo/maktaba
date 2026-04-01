@@ -1,10 +1,10 @@
 import React, { PropsWithChildren } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
-import { Radius } from '@/constants/radius';
 import { Shadows } from '@/constants/shadows';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTokens } from '@/hooks/use-tokens';
 
 export function Card({
   children,
@@ -14,15 +14,28 @@ export function Card({
 }>) {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
+  const t = useTokens();
 
-  return <View style={[styles.base, { backgroundColor: c.card }, style]}>{children}</View>;
+  return (
+    <View
+      style={[
+        styles.base,
+        {
+          backgroundColor: c.card,
+          borderRadius: t.radius.l,
+          padding: t.space.l,
+          ...Shadows.card(scheme),
+        },
+        style,
+      ]}>
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: Radius.l,
-    padding: 16,
-    ...Shadows.card,
+    // token-driven in component
   },
 });
 

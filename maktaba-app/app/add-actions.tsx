@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTokens } from '@/hooks/use-tokens';
 
 type Action = {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
@@ -21,31 +22,80 @@ const ACTIONS: Action[] = [
 export default function AddActionsModal() {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
+  const t = useTokens();
 
   return (
     <View style={styles.backdropWrap} pointerEvents="box-none">
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={[styles.backdrop, { backgroundColor: c.overlayScrim }]} onPress={() => router.back()} />
 
-      <View style={[styles.sheet, { backgroundColor: c.card, borderColor: c.border }]}>
-        <View style={styles.grabber} />
-        <Text style={[styles.title, { color: c.text }]}>Add</Text>
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: c.card,
+            borderColor: c.border,
+            paddingTop: t.space.s,
+            paddingHorizontal: t.space.xl,
+            paddingBottom: t.space.xl,
+            borderTopLeftRadius: t.radius.xl,
+            borderTopRightRadius: t.radius.xl,
+          },
+        ]}>
+        <View
+          style={[
+            styles.grabber,
+            {
+              width: t.size.icon.headerLeft,
+              height: t.space.xs,
+              borderRadius: t.radius.s,
+              backgroundColor: c.border,
+              marginBottom: t.space.s,
+            },
+          ]}
+        />
+        <Text style={[styles.title, { color: c.text, fontSize: t.typography.size.xxl, fontWeight: t.typography.weight.bold, marginBottom: t.space.l }]}>
+          Add
+        </Text>
 
-        <View style={styles.actionsRow}>
+        <View style={[styles.actionsRow, { gap: t.space.m }]}>
           {ACTIONS.map((a) => (
             <Pressable
               key={a.title}
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.action,
-                { backgroundColor: c.background },
+                {
+                  backgroundColor: c.background,
+                  borderRadius: t.radius.l,
+                  paddingVertical: t.space.l,
+                  paddingHorizontal: t.space.m,
+                  gap: t.space.s,
+                },
                 pressed && { opacity: 0.85 },
               ]}>
-              <View style={[styles.iconWrap, { backgroundColor: c.primarySoft }]}>
-                <MaterialIcons name={a.icon} size={22} color={c.primary} />
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor: c.primarySoft,
+                    width: t.size.header.sideSlot,
+                    height: t.size.header.sideSlot,
+                    borderRadius: t.size.header.sideSlot / 2,
+                  },
+                ]}>
+                <MaterialIcons name={a.icon} size={t.size.icon.l} color={c.primary} />
               </View>
-              <Text style={[styles.actionTitle, { color: c.text }]}>{a.title}</Text>
+              <Text
+                style={[
+                  styles.actionTitle,
+                  { color: c.text, fontSize: t.typography.size.l, fontWeight: t.typography.weight.bold },
+                ]}>
+                {a.title}
+              </Text>
               {a.subtitle ? (
-                <Text style={[styles.actionSubtitle, { color: c.mutedText }]}>{a.subtitle}</Text>
+                <Text style={[styles.actionSubtitle, { color: c.mutedText, fontSize: t.typography.size.m }]}>
+                  {a.subtitle}
+                </Text>
               ) : null}
             </Pressable>
           ))}
@@ -62,56 +112,31 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 22,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
   },
   grabber: {
     alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-    marginBottom: 10,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 14,
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 12,
   },
   action: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
     alignItems: 'center',
-    gap: 8,
   },
   iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
     textAlign: 'center',
   },
   actionSubtitle: {
-    fontSize: 12,
     textAlign: 'center',
   },
 });

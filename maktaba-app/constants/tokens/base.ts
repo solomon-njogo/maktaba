@@ -1,0 +1,92 @@
+export const TokenBase = {
+  layout: {
+    flex1: 1,
+  },
+  breakpoints: {
+    tablet: 820,
+  },
+  spacing: {
+    xs: 6,
+    s: 8,
+    m: 12,
+    l: 16,
+    xl: 24,
+    xxl: 32,
+  },
+  radius: {
+    s: 12,
+    m: 16,
+    l: 20,
+    xl: 26,
+    pill: 999,
+  },
+  typography: {
+    size: {
+      xs: 10,
+      s: 11,
+      m: 12,
+      l: 13,
+      xl: 14,
+      xxl: 16,
+      title: 22,
+      headerTitle: 28,
+    },
+    weight: {
+      regular: '400',
+      semiBold: '600',
+      bold: '700',
+      extraBold: '800',
+      black: '900',
+    },
+    lineHeight: {
+      m: 24,
+      title: 32,
+      headerTitle: 32,
+      link: 30,
+    },
+  },
+  sizing: {
+    icon: {
+      s: 14,
+      m: 20,
+      l: 24,
+      xl: 26,
+      xxl: 30,
+      jumbo: 34,
+      headerLeft: 38,
+    },
+    button: {
+      minHeight: 44,
+    },
+    tabBar: {
+      heightAndroid: 70,
+      heightIos: 86,
+      padTop: 8,
+      padBottomAndroid: 10,
+      padBottomIos: 26,
+    },
+    fab: {
+      wrapWidth: 74,
+      size: 58,
+      icon: 30,
+      lift: 22,
+    },
+    header: {
+      minHeight: 160,
+      maxHeight: 220,
+      heightWidthRatio: 0.48,
+      contentPadTopAndroid: 44,
+      contentPadTopIos: 54,
+      contentPadX: 18,
+      sideSlot: 48,
+      sideSlotRadius: 24,
+      curveLeftRight: 120,
+      curveBottom: 140,
+      curveHeight: 220,
+      curveRadius: 280,
+      rowGap: 12,
+      centerGap: 2,
+    },
+  },
+} as const;
+

@@ -4,13 +4,14 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTokens } from '@/hooks/use-tokens';
 
 export function DonutMetric({
   value,
   label,
   progress,
-  size = 120,
-  stroke = 14,
+  size,
+  stroke,
 }: {
   value: string | number;
   label: string;
@@ -20,23 +21,27 @@ export function DonutMetric({
 }) {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
+  const t = useTokens();
+
+  const resolvedSize = size ?? t.scale.n(t.size.header.curveHeight);
+  const resolvedStroke = stroke ?? t.space.m;
 
   const clamped = Math.max(0, Math.min(1, progress));
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
+  const r = (resolvedSize - resolvedStroke) / 2;
+  const cx = resolvedSize / 2;
+  const cy = resolvedSize / 2;
   const circumference = 2 * Math.PI * r;
   const dash = circumference * clamped;
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
+    <View style={[styles.wrap, { width: resolvedSize, height: resolvedSize }]}>
+      <Svg width={resolvedSize} height={resolvedSize}>
         <Circle
           cx={cx}
           cy={cy}
           r={r}
           stroke={c.border}
-          strokeWidth={stroke}
+          strokeWidth={resolvedStroke}
           fill="none"
         />
         <Circle
@@ -44,7 +49,7 @@ export function DonutMetric({
           cy={cy}
           r={r}
           stroke={c.primary}
-          strokeWidth={stroke}
+          strokeWidth={resolvedStroke}
           strokeLinecap="round"
           fill="none"
           strokeDasharray={`${dash} ${circumference - dash}`}
@@ -53,8 +58,16 @@ export function DonutMetric({
         />
       </Svg>
       <View style={styles.center}>
-        <Text style={[styles.value, { color: c.text }]}>{value}</Text>
-        <Text style={[styles.label, { color: c.mutedText }]}>{label}</Text>
+        <Text
+          style={[
+            styles.value,
+            { color: c.text, fontSize: t.typography.size.headerTitle, fontWeight: t.typography.weight.black, lineHeight: t.typography.lineHeight.headerTitle },
+          ]}>
+          {value}
+        </Text>
+        <Text style={[styles.label, { color: c.mutedText, fontSize: t.typography.size.m, fontWeight: t.typography.weight.bold }]}>
+          {label}
+        </Text>
       </View>
     </View>
   );
@@ -71,13 +84,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
-    fontSize: 30,
-    fontWeight: '900',
-    lineHeight: 34,
+    // token-driven in component
   },
   label: {
-    fontSize: 12,
-    fontWeight: '700',
+    // token-driven in component
   },
 });
 
