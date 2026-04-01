@@ -93,6 +93,42 @@ function googleBooksCoverUrlFromRaw(raw: string): string {
   return https;
 }
 
+type ImageLinks = NonNullable<VolumeInfo["imageLinks"]>;
+
+/** Largest available art for Notion cover / Files & media (better preview than zoom=1 thumbs). */
+function pickLargestImageRaw(links?: ImageLinks): string | null {
+  if (!links) return null;
+  const order = [
+    links.extraLarge,
+    links.large,
+    links.medium,
+    links.small,
+    links.thumbnail,
+    links.smallThumbnail,
+  ];
+  for (const u of order) {
+    if (u?.trim()) return u;
+  }
+  return null;
+}
+
+/** Smaller URL for page icon when Google exposes separate sizes. */
+function pickSmallestImageRaw(links?: ImageLinks): string | null {
+  if (!links) return null;
+  const order = [
+    links.smallThumbnail,
+    links.thumbnail,
+    links.small,
+    links.medium,
+    links.large,
+    links.extraLarge,
+  ];
+  for (const u of order) {
+    if (u?.trim()) return u;
+  }
+  return null;
+}
+
 function pickNormalizedIsbnFromVolume(info: VolumeInfo): string | null {
   const ids = info.industryIdentifiers;
   if (!ids?.length) return null;
@@ -146,10 +182,11 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
 
       const info = items[0].volumeInfo;
 
-      const thumbRaw =
-        info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail ?? null;
+      const links = info.imageLinks;
+      const thumbRaw = pickSmallestImageRaw(links);
+      const coverRaw = pickLargestImageRaw(links) ?? thumbRaw;
       const thumbnailUrl = thumbRaw ? toHttps(thumbRaw) : null;
-      const coverUrl = thumbRaw ? googleBooksCoverUrlFromRaw(thumbRaw) : null;
+      const coverUrl = coverRaw ? googleBooksCoverUrlFromRaw(coverRaw) : null;
 
       const book: BookInfo = {
         title: info.title ?? "",
@@ -224,5 +261,9 @@ interface VolumeInfo {
   imageLinks?: {
     smallThumbnail?: string;
     thumbnail?: string;
+    small?: string;
+    medium?: string;
+    large?: string;
+    extraLarge?: string;
   };
 }

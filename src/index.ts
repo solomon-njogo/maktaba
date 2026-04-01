@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { Client } from "@notionhq/client";
-import { enrichDatabaseOnce } from "./enrich.js";
+import {
+  enrichDatabaseOnce,
+  fillEmptyBookFieldsFromIsbnOnce,
+  runDailyEmptyFieldFillIfDue,
+} from "./enrich.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -9,6 +13,13 @@ const DATABASE_ID = process.env.NOTION_DATABASE_ID;
 
 const watchMode =
   process.argv.includes("--watch") || process.env.MAKTABA_WATCH === "1";
+
+const dailyMode =
+  process.argv.includes("--daily") || process.env.MAKTABA_DAILY === "1";
+
+const fillEmptyMode =
+  process.argv.includes("--fill-empty") ||
+  process.env.MAKTABA_FILL_EMPTY === "1";
 
 function parsePollIntervalMs(): number {
   const raw = process.env.MAKTABA_POLL_INTERVAL_MS;
@@ -75,6 +86,24 @@ async function main(): Promise<void> {
 
   if (watchMode) {
     await runWatch(notion, databaseId);
+    return;
+  }
+
+  if (dailyMode) {
+    const { ran, summary } = await runDailyEmptyFieldFillIfDue(
+      notion,
+      databaseId
+    );
+    if (ran && summary) {
+      console.log(
+        `[Maktaba] Daily fill finished: filled ${summary.filled}, skipped ${summary.skipped}, duplicates ${summary.duplicates}, failed ${summary.failed}`
+      );
+    }
+    return;
+  }
+
+  if (fillEmptyMode) {
+    await fillEmptyBookFieldsFromIsbnOnce(notion, databaseId);
     return;
   }
 

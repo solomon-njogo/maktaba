@@ -5,6 +5,9 @@
   "functions": {
     "api/notion-webhook.ts": {
       "maxDuration": 60
+    },
+    "api/daily-fill.ts": {
+      "maxDuration": 300
     }
   }
 }

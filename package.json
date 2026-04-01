@@ -8,7 +8,11 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "watch": "tsx src/index.ts --watch",
-    "start:watch": "node dist/index.js --watch"
+    "start:watch": "node dist/index.js --watch",
+    "daily": "tsx src/index.ts --daily",
+    "fill-empty": "tsx src/index.ts --fill-empty",
+    "start:daily": "node dist/index.js --daily",
+    "start:fill-empty": "node dist/index.js --fill-empty"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
