@@ -142,11 +142,11 @@ function normalizeComparableImageUrl(url: string): string {
 }
 
 /**
- * URL for Notion **Files & media** Thumbnail: prefer high-res cover so the cell shows a real preview (not a tiny zoom=1 strip).
- * Page icon still uses {@link BookInfo.thumbnailUrl} separately.
+ * URL for Notion **Files & media** Thumbnail: same source as the page icon ({@link BookInfo.thumbnailUrl}).
+ * High-res {@link BookInfo.coverUrl} (e.g. Google `zoom=0`) often breaks in Notion as “image not available” while the thumb URL still works.
  */
 function thumbnailFilesPropertyUrl(book: BookInfo): string | null {
-  return book.coverUrl ?? book.thumbnailUrl ?? null;
+  return book.thumbnailUrl ?? book.coverUrl ?? null;
 }
 
 /**
