@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +13,43 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
 import { listBooks } from '@/lib/db/books';
 
+type BookListItem = {
+  id: string;
+  coverUri: string | null;
+  author: string | null;
+  title: string;
+  isbn: string | null;
+  pages: number | null;
+  status: string;
+  updatedAt: number;
+};
+
+function isPrefetchableRemoteCoverUri(uri: string) {
+  const trimmed = uri.trim();
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
+async function prefetchCoverUris(uris: (string | null | undefined)[]) {
+  const unique = Array.from(
+    new Set(
+      uris
+        .map((u) => (typeof u === 'string' ? u.trim() : ''))
+        .filter((u) => u.length > 0 && isPrefetchableRemoteCoverUri(u))
+    )
+  );
+
+  // Prefetch in small batches to avoid hammering the network on huge libraries.
+  const batchSize = 12;
+  for (let i = 0; i < unique.length; i += batchSize) {
+    const batch = unique.slice(i, i + batchSize);
+    try {
+      await Image.prefetch(batch, { cachePolicy: 'memory-disk' });
+    } catch {
+      // Best-effort prefetch; rendering still works without it.
+    }
+  }
+}
+
 export default function MyBooksScreen() {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
@@ -22,18 +59,7 @@ export default function MyBooksScreen() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'inProgress' | 'finished' | 'dropped'>('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'list' | 'grid'>('list');
-  const [books, setBooks] = useState<
-    {
-      id: string;
-      coverUri: string | null;
-      author: string | null;
-      title: string;
-      isbn: string | null;
-      pages: number | null;
-      status: string;
-      updatedAt: number;
-    }[]
-  >([]);
+  const [books, setBooks] = useState<BookListItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const filters = useMemo(
@@ -53,18 +79,21 @@ export default function MyBooksScreen() {
     try {
       const rows = await listBooks();
       // drizzle types can be loose at runtime; normalize the fields we render
-      setBooks(
-        rows.map((r: any) => ({
-          id: String(r.id),
-          coverUri: (r.coverUri ?? null) as string | null,
-          author: (r.author ?? null) as string | null,
-          title: String(r.title),
-          isbn: (r.isbn ?? null) as string | null,
-          pages: (typeof r.pages === 'number' ? r.pages : r.pages == null ? null : Number(r.pages)) as number | null,
-          status: String(r.status ?? 'tbr'),
-          updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Number(r.updatedAt ?? Date.now()),
-        }))
-      );
+      const normalized: BookListItem[] = rows.map((r: any) => ({
+        id: String(r.id),
+        coverUri: (r.coverUri ?? null) as string | null,
+        author: (r.author ?? null) as string | null,
+        title: String(r.title),
+        isbn: (r.isbn ?? null) as string | null,
+        pages: (typeof r.pages === 'number' ? r.pages : r.pages == null ? null : Number(r.pages)) as number | null,
+        status: String(r.status ?? 'tbr'),
+        updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Number(r.updatedAt ?? Date.now()),
+      }));
+
+      setBooks(normalized);
+
+      // Warm the image cache so covers pop in faster (especially on revisit / refocus).
+      void prefetchCoverUris(normalized.map((b) => b.coverUri));
     } finally {
       setLoading(false);
     }
@@ -141,7 +170,7 @@ export default function MyBooksScreen() {
                   lineHeight: 44,
                 }}
               >
-                {displayedBooks.length} book
+                {displayedBooks.length} books
               </ThemedText>
               <ThemedText tone="muted" style={{ maxWidth: 220 }}>
                 {loading ? 'Loading…' : 'Your curated collection'}
@@ -277,7 +306,16 @@ export default function MyBooksScreen() {
               const coverH = view === 'grid' ? 190 : 86;
 
               return (
-                <Card key={b.id} padded={false} style={{ overflow: 'hidden' }}>
+                <Pressable
+                  key={b.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open details for ${b.title}`}
+                  onPress={() =>
+                    router.push({ pathname: '/book-detail', params: { id: b.id } } as Href)
+                  }
+                  style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                >
+                  <Card padded={false} style={{ overflow: 'hidden' }}>
                   <View style={{ padding: t.space.l, flexDirection: view === 'grid' ? 'column' : 'row', gap: t.space.l }}>
                     <View
                       style={{
@@ -293,7 +331,16 @@ export default function MyBooksScreen() {
                       }}
                     >
                       {b.coverUri ? (
-                        <Image source={{ uri: b.coverUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={120} />
+                        <Image
+                          recyclingKey={b.id}
+                          source={{ uri: b.coverUri }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          priority="high"
+                          allowDownscaling
+                          transition={0}
+                        />
                       ) : (
                         <Ionicons name="book-outline" size={24} color={c.icon} />
                       )}
@@ -313,6 +360,7 @@ export default function MyBooksScreen() {
                     </View>
                   </View>
                 </Card>
+                </Pressable>
               );
             })}
           </View>

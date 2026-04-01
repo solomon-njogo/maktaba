@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 
+import { backfillMissingMetadataFromOpenLibrary } from '@/lib/db/backfill-metadata';
 import { initLocalDb } from '@/lib/db/init';
 
 import {
@@ -36,6 +38,9 @@ export default function RootLayout() {
     (async () => {
       try {
         await initLocalDb();
+        if (!cancelled) {
+          void backfillMissingMetadataFromOpenLibrary();
+        }
       } finally {
         if (!cancelled) SplashScreen.hideAsync();
       }
@@ -49,15 +54,24 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen
-        name="add-book"
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-    </Stack>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="add-book"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="book-detail"
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

@@ -16,6 +16,14 @@ import { addBook } from '@/lib/db/books';
 import { barcodeToIsbnCandidate, validateIsbnCandidate } from '@/lib/isbn';
 import { fetchBookByIsbn, type OpenLibraryBook } from '@/lib/openlibrary';
 
+function prefetchCoverIfNeeded(coverUrl?: string | null) {
+  const uri = typeof coverUrl === 'string' ? coverUrl.trim() : '';
+  if (!uri) return;
+  if (!uri.startsWith('http://') && !uri.startsWith('https://')) return;
+
+  void Image.prefetch(uri, { cachePolicy: 'memory-disk' });
+}
+
 type ActionCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -147,6 +155,7 @@ export default function AddBookScreen() {
         setPreview(null);
         return;
       }
+      prefetchCoverIfNeeded(book.coverUrl);
       setPreview(book);
       setIsbnInput(v.normalized);
       if (mode === 'scan') openApprovalSheet();
@@ -172,6 +181,7 @@ export default function AddBookScreen() {
         author: preview.authors?.length ? preview.authors.join(', ') : null,
         pages: preview.numberOfPages ?? null,
         description: preview.description ?? null,
+        genre: preview.genre ?? null,
         coverUri: preview.coverUrl ?? null,
         status: 'tbr',
       });
@@ -329,7 +339,16 @@ export default function AddBookScreen() {
                         }}
                       >
                         {preview.coverUrl ? (
-                          <Image source={{ uri: preview.coverUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                          <Image
+                            recyclingKey={preview.isbn}
+                            source={{ uri: preview.coverUrl }}
+                            style={{ width: '100%', height: '100%' }}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            priority="high"
+                            allowDownscaling
+                            transition={0}
+                          />
                         ) : (
                           <Ionicons name="book-outline" size={26} color={c.icon} />
                         )}
@@ -542,7 +561,16 @@ export default function AddBookScreen() {
                         }}
                       >
                         {preview.coverUrl ? (
-                          <Image source={{ uri: preview.coverUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                          <Image
+                            recyclingKey={`${preview.isbn}-sheet`}
+                            source={{ uri: preview.coverUrl }}
+                            style={{ width: '100%', height: '100%' }}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            priority="high"
+                            allowDownscaling
+                            transition={0}
+                          />
                         ) : (
                           <Ionicons name="book-outline" size={26} color={c.icon} />
                         )}

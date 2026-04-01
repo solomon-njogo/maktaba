@@ -45,6 +45,37 @@ export async function listBooks() {
   return await db.select().from(books).orderBy(books.updatedAt);
 }
 
+export async function getBookById(id: string) {
+  const db = await getDb();
+  const rows = await db.select().from(books).where(eq(books.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Partial update for fields fetched from Open Library (backfill / refresh). */
+export type BookMetadataPatch = Partial<{
+  description: string | null;
+  genre: string | null;
+  pages: number | null;
+  coverUri: string | null;
+  author: string | null;
+}>;
+
+export async function updateBookMetadata(id: string, patch: BookMetadataPatch) {
+  const db = await getDb();
+  const updates: Partial<typeof books.$inferInsert> = { updatedAt: Date.now() };
+  let hasField = false;
+  for (const k of Object.keys(patch) as (keyof BookMetadataPatch)[]) {
+    const v = patch[k];
+    if (v !== undefined) {
+      (updates as Record<string, unknown>)[k] = v;
+      hasField = true;
+    }
+  }
+  if (!hasField) return;
+
+  await db.update(books).set(updates).where(eq(books.id, id));
+}
+
 export async function updateBookStatus(id: string, status: BookStatus) {
   const db = await getDb();
   await db
