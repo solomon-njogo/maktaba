@@ -8,6 +8,13 @@ const NOTION_SELECT_NAME_MAX = 100;
 const GOOGLE_BOOKS_MAX_ATTEMPTS = 5;
 const GOOGLE_BOOKS_BASE_BACKOFF_MS = 1_500;
 
+/** Avoid repeated lookups when Notion sends multiple webhooks for the same row. */
+const BOOK_CACHE_TTL_MS = 5 * 60_000;
+const bookCache = new Map<
+  string,
+  { expires: number; value: BookInfo | null }
+>();
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -111,6 +118,12 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
     return null;
   }
 
+  const now = Date.now();
+  const cached = bookCache.get(isbn);
+  if (cached && cached.expires > now) {
+    return cached.value;
+  }
+
   const params: Record<string, string> = { q: `isbn:${isbn}` };
   const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
   if (apiKey) {
@@ -127,6 +140,7 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
       const items = response.data.items;
       if (!items || items.length === 0) {
         console.warn(`  [GoogleBooks] No results for ISBN: ${isbn}`);
+        bookCache.set(isbn, { expires: Date.now() + 60_000, value: null });
         return null;
       }
 
@@ -137,7 +151,7 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
       const thumbnailUrl = thumbRaw ? toHttps(thumbRaw) : null;
       const coverUrl = thumbRaw ? googleBooksCoverUrlFromRaw(thumbRaw) : null;
 
-      return {
+      const book: BookInfo = {
         title: info.title ?? "",
         authors: info.authors ?? [],
         thumbnailUrl,
@@ -146,9 +160,15 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
         typeLabel: typeLabelFromPrintType(info.printType),
         normalizedIsbnFromApi: pickNormalizedIsbnFromVolume(info),
       };
+      bookCache.set(isbn, {
+        expires: Date.now() + BOOK_CACHE_TTL_MS,
+        value: book,
+      });
+      return book;
     } catch (err) {
       if (!axios.isAxiosError(err)) {
         console.error(`  [GoogleBooks] Unexpected error for ISBN ${isbn}:`, err);
+        bookCache.set(isbn, { expires: Date.now() + 30_000, value: null });
         return null;
       }
 
@@ -163,6 +183,7 @@ export async function fetchBookByIsbn(rawIsbn: string): Promise<BookInfo | null>
         console.error(
           `  [GoogleBooks] HTTP error for ISBN ${isbn}: ${status ?? err.message}`
         );
+        bookCache.set(isbn, { expires: Date.now() + 30_000, value: null });
         return null;
       }
 

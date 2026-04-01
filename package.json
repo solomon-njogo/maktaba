@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
+    "@vercel/functions": "^3.4.3",
     "axios": "^1.7.2",
     "dotenv": "^16.4.5"
   },

@@ -9,11 +9,10 @@ export const config = {
   },
 };
 
+// ISBN lives in properties only; content/moved events spam webhooks and re-run Google/Notion work.
 const PAGE_ENRICH_EVENTS = new Set([
   "page.created",
   "page.properties_updated",
-  "page.content_updated",
-  "page.moved",
   "page.undeleted",
 ]);
 
@@ -141,16 +140,40 @@ export default async function handler(
   const type = body.type;
   const entity = body.entity as { id?: string; type?: string } | undefined;
 
-  if (
+  const shouldEnrich =
     typeof type === "string" &&
     PAGE_ENRICH_EVENTS.has(type) &&
     entity?.type === "page" &&
-    typeof entity.id === "string"
-  ) {
+    typeof entity.id === "string";
+
+  if (shouldEnrich) {
     const notion = new Client({ auth: notionToken });
-    const result = await tryEnrichPageById(notion, databaseId, entity.id);
-    if (result === "enriched" || result === "failed") {
-      console.log(`[webhook] ${type} ${entity.id} → ${result}`);
+    const pageId = entity!.id!;
+    const work = (async () => {
+      try {
+        const result = await tryEnrichPageById(
+          notion,
+          databaseId,
+          pageId,
+          { skipRateLimitDelay: true }
+        );
+        if (
+          result === "enriched" ||
+          result === "failed" ||
+          result === "duplicate"
+        ) {
+          console.log(`[webhook] ${type} ${pageId} → ${result}`);
+        }
+      } catch (err) {
+        console.error("[webhook] enrich error:", err);
+      }
+    })();
+
+    if (process.env.VERCEL) {
+      const { waitUntil } = await import("@vercel/functions");
+      waitUntil(work);
+    } else {
+      await work;
     }
   }
 

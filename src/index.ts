@@ -48,9 +48,13 @@ async function runWatch(notion: Client, databaseId: string): Promise<void> {
         const summary = await enrichDatabaseOnce(notion, databaseId, {
           quietWhenEmpty: true,
         });
-        if (summary.enriched > 0 || summary.failed > 0) {
+        if (
+          summary.enriched > 0 ||
+          summary.failed > 0 ||
+          summary.duplicates > 0
+        ) {
           console.log(
-            `[Maktaba] ${new Date().toISOString()}  enriched: ${summary.enriched}  skipped: ${summary.skipped}  failed: ${summary.failed}`
+            `[Maktaba] ${new Date().toISOString()}  enriched: ${summary.enriched}  skipped: ${summary.skipped}  duplicates: ${summary.duplicates}  failed: ${summary.failed}`
           );
         }
       } catch (err) {

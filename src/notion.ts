@@ -66,6 +66,48 @@ export function extractIsbn(page: PageObjectResponse): string | null {
   return text.length > 0 ? text : null;
 }
 
+/**
+ * Groups page ids by normalized ISBN (invalid/missing normalization omitted).
+ */
+export function groupPageIdsByNormalizedIsbn(
+  pages: PageObjectResponse[]
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const p of pages) {
+    const raw = extractIsbn(p);
+    if (!raw) continue;
+    const n = normalizeIsbn(raw);
+    if (!n) continue;
+    const list = map.get(n) ?? [];
+    list.push(p.id);
+    map.set(n, list);
+  }
+  return map;
+}
+
+/** Stable choice when several rows share the same ISBN (deterministic tie-break). */
+export function canonicalPageIdForIsbnGroup(ids: string[]): string {
+  return [...ids].sort()[0];
+}
+
+/**
+ * All database rows whose ISBN normalizes to `targetNorm` (full scan of ISBN rows).
+ */
+export async function findPageIdsWithSameNormalizedIsbn(
+  notion: Client,
+  databaseId: string,
+  targetNorm: string
+): Promise<string[]> {
+  const pages = await queryPagesToEnrich(notion, databaseId);
+  const ids: string[] = [];
+  for (const p of pages) {
+    const raw = extractIsbn(p);
+    if (!raw) continue;
+    if (normalizeIsbn(raw) === targetNorm) ids.push(p.id);
+  }
+  return ids;
+}
+
 function getTitlePlain(page: PageObjectResponse): string {
   const prop = page.properties["Name"];
   if (!prop || prop.type !== "title") return "";
@@ -163,12 +205,13 @@ export function pageMetadataDiffersFromBook(
 /**
  * Writes Google Books data into Name, Author, Genre (multi-select), Type (select), ISBN when the API returns one.
  * Sets page icon and cover from API image URLs when available.
- * Does not touch Status, Started, Completed, or Borrowed. 300ms delay after update for rate limits.
+ * Does not touch Status, Started, Completed, or Borrowed. Optional delay after update for bulk rate limits.
  */
 export async function updatePageFromBook(
   notion: Client,
   pageId: string,
-  book: BookInfo
+  book: BookInfo,
+  options?: { rateLimitDelayMs?: number }
 ): Promise<void> {
   const authorText =
     book.authors.length > 0 ? book.authors.join(", ") : "Unknown";
@@ -217,7 +260,8 @@ export async function updatePageFromBook(
     }
     throw err;
   } finally {
-    await delay(DELAY_MS);
+    const ms = options?.rateLimitDelayMs ?? DELAY_MS;
+    if (ms > 0) await delay(ms);
   }
 }
 
