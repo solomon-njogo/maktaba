@@ -140,4 +140,3 @@ export async function fetchBookByIsbn(isbn: string, { signal }: { signal?: Abort
 
   return book;
 }
-

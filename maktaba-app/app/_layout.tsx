@@ -5,8 +5,8 @@ import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 
-import { backfillMissingMetadataFromOpenLibrary } from '@/lib/db/backfill-metadata';
-import { initLocalDb } from '@/lib/db/init';
+import { BulkAddQueueProvider } from '@/contexts/bulk-add-queue';
+import { initAppDatabase, runStartupMetadataBackfill } from '@/middleware';
 
 import {
   EBGaramond_400Regular,
@@ -37,9 +37,9 @@ export default function RootLayout() {
     let cancelled = false;
     (async () => {
       try {
-        await initLocalDb();
+        await initAppDatabase();
         if (!cancelled) {
-          void backfillMissingMetadataFromOpenLibrary();
+          void runStartupMetadataBackfill();
         }
       } finally {
         if (!cancelled) SplashScreen.hideAsync();
@@ -55,6 +55,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <BulkAddQueueProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
@@ -79,6 +80,13 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="add-book-review"
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
           name="book-detail"
           options={{
             presentation: 'card',
@@ -86,6 +94,7 @@ export default function RootLayout() {
           }}
         />
       </Stack>
+      </BulkAddQueueProvider>
     </SafeAreaProvider>
   );
 }

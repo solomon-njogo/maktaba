@@ -85,4 +85,3 @@ function isValidIsbn13(isbn13: string) {
   const check = (10 - (sum % 10)) % 10;
   return check === Number(isbn13[12]);
 }
-

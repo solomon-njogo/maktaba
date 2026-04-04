@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
-import { getDb } from '@/lib/db';
-import { books, type BookStatus } from '@/lib/db/schema';
+import { getDb } from './index';
+import { books, type BookStatus } from './schema';
 
 export type NewBookInput = {
   id: string;
@@ -14,6 +14,7 @@ export type NewBookInput = {
   pages?: number | null;
   status?: BookStatus | null;
   borrowed?: boolean | null;
+  borrowedBy?: string | null;
   startDate?: number | null; // epoch ms
   endDate?: number | null; // epoch ms
 };
@@ -33,6 +34,7 @@ export async function addBook(input: NewBookInput) {
     pages: input.pages ?? null,
     status: (input.status ?? 'tbr') as BookStatus,
     borrowed: input.borrowed ?? false,
+    borrowedBy: input.borrowedBy ?? null,
     startDate: input.startDate ?? null,
     endDate: input.endDate ?? null,
     createdAt: now,
@@ -84,16 +86,67 @@ export async function updateBookStatus(id: string, status: BookStatus) {
     .where(eq(books.id, id));
 }
 
-export async function setBorrowed(id: string, borrowed: boolean, { startDate, endDate }: { startDate?: number | null; endDate?: number | null } = {}) {
+export type BookReadingPatch = {
+  status?: BookStatus;
+  borrowed?: boolean;
+  borrowedBy?: string | null;
+  startDate?: number | null;
+  endDate?: number | null;
+};
+
+/** Applies partial updates; turning `borrowed` off clears borrower name and loan dates. */
+export async function patchBookReading(id: string, patch: BookReadingPatch) {
   const db = await getDb();
+  const rows = await db.select().from(books).where(eq(books.id, id)).limit(1);
+  const current = rows[0];
+  if (!current) return;
+
+  let status = current.status;
+  let borrowed = current.borrowed;
+  let borrowedBy = current.borrowedBy ?? null;
+  let startDate = current.startDate ?? null;
+  let endDate = current.endDate ?? null;
+
+  if (patch.status !== undefined) status = patch.status;
+
+  if (patch.borrowed === false) {
+    borrowed = false;
+    borrowedBy = null;
+    startDate = null;
+    endDate = null;
+  } else {
+    if (patch.borrowed === true) borrowed = true;
+    if (patch.borrowedBy !== undefined) borrowedBy = patch.borrowedBy?.trim() ? patch.borrowedBy.trim() : null;
+    if (patch.startDate !== undefined) startDate = patch.startDate;
+    if (patch.endDate !== undefined) endDate = patch.endDate;
+  }
+
   await db
     .update(books)
     .set({
+      status,
       borrowed,
-      startDate: startDate ?? null,
-      endDate: endDate ?? null,
+      borrowedBy,
+      startDate,
+      endDate,
       updatedAt: Date.now(),
     })
     .where(eq(books.id, id));
 }
 
+export async function setBorrowed(
+  id: string,
+  borrowed: boolean,
+  { startDate, endDate, borrowedBy }: { startDate?: number | null; endDate?: number | null; borrowedBy?: string | null } = {}
+) {
+  if (!borrowed) {
+    await patchBookReading(id, { borrowed: false });
+    return;
+  }
+  await patchBookReading(id, {
+    borrowed: true,
+    ...(startDate !== undefined ? { startDate } : {}),
+    ...(endDate !== undefined ? { endDate } : {}),
+    ...(borrowedBy !== undefined ? { borrowedBy } : {}),
+  });
+}

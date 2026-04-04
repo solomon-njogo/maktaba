@@ -1,8 +1,9 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { Pressable, SafeAreaView, ScrollView, View, useWindowDimensions } from 'react-native';
+import { type Href, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Button } from '@/components/Button';
@@ -12,72 +13,144 @@ import { ThemedText } from '@/components/ThemedText';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
+import { listBooks } from '@/middleware';
+
+type DashboardBook = {
+  id: string;
+  title: string;
+  author: string | null;
+  coverUri: string | null;
+  status: string;
+  updatedAt: number;
+  borrowed: boolean;
+};
 
 type HomeInProgressBook = {
+  id: string;
   title: string;
   author?: string;
   coverUrl?: string | null;
-  progressPct?: number | null; // 0..1
+  updatedLabel?: string | null;
 };
 
 type HomeStats = {
-  totalBooks?: number | null;
-  inProgress?: number | null;
-  finished?: number | null;
-  unread?: number | null;
-  dropped?: number | null;
-};
-
-type HomeChallenge = {
-  yearLabel?: string | null;
-  current?: number | null;
-  target?: number | null;
-};
-
-type HomeWeeklyGoal = {
-  label?: string | null;
-  valueText?: string | null;
-  ctaLabel?: string | null;
-  onPress?: () => void;
+  totalBooks: number;
+  inProgress: number;
+  finished: number;
+  toRead: number;
+  dropped: number;
+  onLoan: number;
 };
 
 type HomeData = {
-  userName?: string | null;
-  inProgressBook?: HomeInProgressBook | null;
-  stats?: HomeStats | null;
-  challenge?: HomeChallenge | null;
-  weeklyGoal?: HomeWeeklyGoal | null;
+  loading: boolean;
+  inProgressBook: HomeInProgressBook | null;
+  stats: HomeStats | null;
+  /** Share of library marked finished (0..1), for ring when total > 0 */
+  finishedShare: number | null;
+  recentBooks: DashboardBook[];
 };
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
 }
 
-function ProgressBar({ value }: { value?: number | null }) {
-  const scheme = useColorScheme() ?? 'light';
-  const c = Colors[scheme];
-  const v = typeof value === 'number' ? clamp01(value) : null;
+function formatRelativeUpdated(ms: number): string {
+  if (!Number.isFinite(ms)) return '';
+  const diff = Date.now() - ms;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return 'Just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 14) return `${day}d ago`;
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
 
-  return (
-    <View
-      style={{
-        height: 6,
-        borderRadius: 6,
-        backgroundColor: c.border,
-        overflow: 'hidden',
-      }}
-      accessibilityRole="progressbar"
-      accessibilityValue={v === null ? undefined : { min: 0, max: 100, now: Math.round(v * 100) }}
-    >
-      <View
-        style={{
-          height: '100%',
-          width: v === null ? '0%' : `${Math.round(v * 100)}%`,
-          backgroundColor: c.primary,
-          borderRadius: 6,
-        }}
-      />
-    </View>
+function normalizeDashboardRows(rows: unknown[]): DashboardBook[] {
+  return rows.map((r: any) => ({
+    id: String(r.id),
+    title: String(r.title),
+    author: (r.author ?? null) as string | null,
+    coverUri: (r.coverUri ?? null) as string | null,
+    status: String(r.status ?? 'tbr'),
+    updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Number(r.updatedAt ?? 0),
+    borrowed: Boolean(r.borrowed),
+  }));
+}
+
+function computeHomeData(books: DashboardBook[]): Omit<HomeData, 'loading'> {
+  if (!books.length) {
+    return {
+      inProgressBook: null,
+      stats: null,
+      finishedShare: null,
+      recentBooks: [],
+    };
+  }
+
+  const reading = books.filter((b) => b.status === 'reading').sort((a, b) => b.updatedAt - a.updatedAt);
+  const firstReading = reading[0];
+  const inProgressBook: HomeInProgressBook | null = firstReading
+    ? {
+        id: firstReading.id,
+        title: firstReading.title,
+        author: firstReading.author?.trim() || undefined,
+        coverUrl: firstReading.coverUri,
+        updatedLabel: formatRelativeUpdated(firstReading.updatedAt),
+      }
+    : null;
+
+  const stats: HomeStats = {
+    totalBooks: books.length,
+    inProgress: books.filter((b) => b.status === 'reading').length,
+    finished: books.filter((b) => b.status === 'read').length,
+    toRead: books.filter((b) => b.status === 'tbr' || b.status === 'buy').length,
+    dropped: books.filter((b) => b.status === 'dropped').length,
+    onLoan: books.filter((b) => b.borrowed).length,
+  };
+
+  const finishedShare = stats.totalBooks > 0 ? stats.finished / stats.totalBooks : null;
+
+  const recentBooks = [...books].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4);
+
+  return { inProgressBook, stats, finishedShare, recentBooks };
+}
+
+function useDashboardData(): HomeData {
+  const [loading, setLoading] = useState(true);
+  const [books, setBooks] = useState<DashboardBook[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await listBooks();
+      setBooks(normalizeDashboardRows(rows));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
+  const derived = useMemo(() => computeHomeData(books), [books]);
+
+  return useMemo(
+    () => ({
+      loading,
+      ...derived,
+    }),
+    [loading, derived]
   );
 }
 
@@ -142,11 +215,6 @@ function Donut({
   );
 }
 
-function useHomeData(): HomeData {
-  // Wire to your store/API later. This keeps UI non-blocking with safe empty states.
-  return useMemo(() => ({}), []);
-}
-
 export default function HomeScreen() {
   const scheme = useColorScheme() ?? 'light';
   const c = Colors[scheme];
@@ -154,7 +222,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  const data = useHomeData();
+  const data = useDashboardData();
 
   const scale = useMemo(() => {
     const clamped = Math.max(0, Math.min(1, (width - 360) / 520));
@@ -204,18 +272,26 @@ export default function HomeScreen() {
         </View>
 
         {/* Greeting */}
-        <View style={{ gap: 4 }}>
-          <ThemedText
-            variant="headline"
-            style={{
-              fontSize: Math.round(t.typography.size.headerTitle * scale),
-              lineHeight: Math.round(t.typography.lineHeight.headerTitle * scale),
-            }}
-          >
-            {data.userName ? `Hello, ${data.userName}` : 'Hello'}
-          </ThemedText>
-          <ThemedText tone="muted" style={{ maxWidth: 320 }}>
-            Curating your literary journey today.
+        <View style={{ gap: t.space.s }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.space.m }}>
+            <ThemedText
+              variant="headline"
+              style={{
+                flex: 1,
+                fontSize: Math.round(t.typography.size.headerTitle * scale),
+                lineHeight: Math.round(t.typography.lineHeight.headerTitle * scale),
+              }}
+            >
+              Library overview
+            </ThemedText>
+            {data.loading ? <ActivityIndicator size="small" color={c.primary} accessibilityLabel="Loading library" /> : null}
+          </View>
+          <ThemedText tone="muted" style={{ maxWidth: 420 }}>
+            {data.loading
+              ? 'Refreshing your shelf…'
+              : data.stats
+                ? `${data.stats.totalBooks} book${data.stats.totalBooks === 1 ? '' : 's'} · ${data.stats.inProgress} in progress · ${data.stats.onLoan} on loan`
+                : 'Add your first book to see counts and shortcuts here.'}
           </ThemedText>
         </View>
 
@@ -238,8 +314,12 @@ export default function HomeScreen() {
           <Card padded={false} style={{ overflow: 'hidden' }}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Open current book"
-              onPress={() => router.push('/my-books')}
+              accessibilityLabel={data.inProgressBook ? `Open ${data.inProgressBook.title}` : 'Open books in progress'}
+              onPress={() =>
+                data.inProgressBook
+                  ? router.push({ pathname: '/book-detail', params: { id: data.inProgressBook.id } } as Href)
+                  : router.push({ pathname: '/my-books', params: { filter: 'inProgress' } } as Href)
+              }
               style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
             >
               <View style={{ padding: t.space.xl, flexDirection: 'row', gap: t.space.l }}>
@@ -271,41 +351,211 @@ export default function HomeScreen() {
                 <View style={{ flex: 1, justifyContent: 'space-between', paddingVertical: 6 }}>
                   <View style={{ gap: 6 }}>
                     <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                      Currently Reading
+                      Currently reading
                     </ThemedText>
 
                     <ThemedText variant="title" numberOfLines={2}>
-                      {data.inProgressBook?.title ?? '—'}
+                      {data.inProgressBook?.title ?? 'Nothing in progress'}
                     </ThemedText>
 
-                    <ThemedText tone="muted" numberOfLines={1}>
-                      {data.inProgressBook?.author ?? ''}
+                    <ThemedText tone="muted" numberOfLines={2}>
+                      {data.inProgressBook
+                        ? data.inProgressBook.author?.trim()
+                          ? data.inProgressBook.author
+                          : 'Unknown author'
+                        : 'Open a book in My Books and set its status to Reading, or start a new title.'}
                     </ThemedText>
                   </View>
 
-                  <View style={{ gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <ThemedText variant="caption" tone="muted">
-                        Progress
-                      </ThemedText>
-                      <ThemedText variant="caption" tone="muted">
-                        {typeof data.inProgressBook?.progressPct === 'number'
-                          ? `${Math.round(clamp01(data.inProgressBook.progressPct) * 100)}%`
-                          : '—'}
+                  {data.inProgressBook ? (
+                    <View style={{ gap: 8, paddingTop: t.space.s }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <ThemedText variant="caption" tone="muted">
+                          Last updated
+                        </ThemedText>
+                        <ThemedText variant="caption" tone="muted">
+                          {data.inProgressBook.updatedLabel ?? '—'}
+                        </ThemedText>
+                      </View>
+                      <ThemedText variant="caption" tone="muted" style={{ fontStyle: 'italic' }}>
+                        Set finished or on loan from the book page.
                       </ThemedText>
                     </View>
-                    <ProgressBar value={data.inProgressBook?.progressPct ?? null} />
-                  </View>
+                  ) : null}
                 </View>
               </View>
             </Pressable>
           </Card>
         </View>
 
+        {/* TBR & borrowed shortcuts */}
+        <View style={{ gap: t.space.m }}>
+          <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            Shelves
+          </ThemedText>
+
+          <View
+            style={{
+              flexDirection: width >= 520 ? 'row' : 'column',
+              gap: t.space.m,
+            }}
+          >
+            <View style={{ flex: width >= 520 ? 1 : undefined, minWidth: 0 }}>
+              <Card padded={false} style={{ overflow: 'hidden' }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open to be read list"
+                  onPress={() =>
+                    router.push({ pathname: '/my-books', params: { filter: 'tbr' } } as Href)
+                  }
+                  style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                >
+                  <View style={{ padding: t.space.xl, gap: t.space.s }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <ThemedText variant="title" numberOfLines={2} style={{ flex: 1, paddingRight: t.space.m }}>
+                        To be read
+                      </ThemedText>
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 12,
+                          backgroundColor: c.primarySoft,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name="bookmark-outline" size={22} color={c.primary} />
+                      </View>
+                    </View>
+                    <ThemedText tone="muted" numberOfLines={2}>
+                      Everything on your TBR in one list.
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              </Card>
+            </View>
+
+            <View style={{ flex: width >= 520 ? 1 : undefined, minWidth: 0 }}>
+              <Card padded={false} style={{ overflow: 'hidden' }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open borrowed books list"
+                  onPress={() =>
+                    router.push({ pathname: '/my-books', params: { filter: 'borrowed' } } as Href)
+                  }
+                  style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                >
+                  <View style={{ padding: t.space.xl, gap: t.space.s }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <ThemedText variant="title" numberOfLines={2} style={{ flex: 1, paddingRight: t.space.m }}>
+                        On loan
+                      </ThemedText>
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 12,
+                          backgroundColor: c.primarySoft,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name="people-outline" size={22} color={c.primary} />
+                      </View>
+                    </View>
+                    <ThemedText tone="muted" numberOfLines={2}>
+                      Copies you’ve marked as borrowed out.
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              </Card>
+            </View>
+          </View>
+        </View>
+
+        {/* Quick add — matches Add Book flow */}
+        <View style={{ gap: t.space.m }}>
+          <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            Add to library
+          </ThemedText>
+          <View
+            style={{
+              flexDirection: width >= 520 ? 'row' : 'column',
+              gap: t.space.m,
+            }}
+          >
+            <View style={{ flex: width >= 520 ? 1 : undefined, minWidth: 0 }}>
+              <Card padded={false} style={{ overflow: 'hidden' }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Scan barcode to add a book"
+                  onPress={() => router.push('/add-book-scan')}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                >
+                  <View style={{ padding: t.space.xl, flexDirection: 'row', alignItems: 'center', gap: t.space.m }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        backgroundColor: c.primarySoft,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="barcode-outline" size={22} color={c.primary} />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <ThemedText variant="title">Scan barcode</ThemedText>
+                      <ThemedText tone="muted" numberOfLines={2}>
+                        Add by ISBN from the back cover.
+                      </ThemedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={c.icon} />
+                  </View>
+                </Pressable>
+              </Card>
+            </View>
+            <View style={{ flex: width >= 520 ? 1 : undefined, minWidth: 0 }}>
+              <Card padded={false} style={{ overflow: 'hidden' }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add book by typing ISBN"
+                  onPress={() => router.push('/add-book-isbn')}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                >
+                  <View style={{ padding: t.space.xl, flexDirection: 'row', alignItems: 'center', gap: t.space.m }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        backgroundColor: c.primarySoft,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="pricetag-outline" size={22} color={c.primary} />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <ThemedText variant="title">Enter ISBN</ThemedText>
+                      <ThemedText tone="muted" numberOfLines={2}>
+                        Type or paste an ISBN to look it up.
+                      </ThemedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={c.icon} />
+                  </View>
+                </Pressable>
+              </Card>
+            </View>
+          </View>
+        </View>
+
         {/* Statistics */}
         <View style={{ gap: t.space.m }}>
           <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
-            Statistics
+            Shelf snapshot
           </ThemedText>
 
           <Card padded={false}>
@@ -313,104 +563,123 @@ export default function HomeScreen() {
               <Donut
                 size={donutSize}
                 strokeWidth={donutStroke}
-                value={
-                  typeof data.challenge?.current === 'number' && typeof data.challenge?.target === 'number' && data.challenge.target > 0
-                    ? data.challenge.current / data.challenge.target
-                    : null
-                }
-                labelTop={typeof data.stats?.totalBooks === 'number' ? `${data.stats.totalBooks}` : undefined}
-                labelBottom="Total Books"
+                value={data.finishedShare}
+                labelTop={data.stats ? `${data.stats.finished}` : undefined}
+                labelBottom="Finished"
               />
 
               <View style={{ flex: 1, gap: 10 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <ThemedText variant="caption" tone="muted">
+                    In library
+                  </ThemedText>
+                  <ThemedText variant="caption">{data.stats ? `${data.stats.totalBooks}` : '—'}</ThemedText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <ThemedText variant="caption" tone="muted">
                     In progress
                   </ThemedText>
-                  <ThemedText variant="caption">{typeof data.stats?.inProgress === 'number' ? `${data.stats.inProgress}` : '—'}</ThemedText>
+                  <ThemedText variant="caption">{data.stats ? `${data.stats.inProgress}` : '—'}</ThemedText>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <ThemedText variant="caption" tone="muted">
-                    Finished
+                    To read
                   </ThemedText>
-                  <ThemedText variant="caption">{typeof data.stats?.finished === 'number' ? `${data.stats.finished}` : '—'}</ThemedText>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <ThemedText variant="caption" tone="muted">
-                    Unread
-                  </ThemedText>
-                  <ThemedText variant="caption">{typeof data.stats?.unread === 'number' ? `${data.stats.unread}` : '—'}</ThemedText>
+                  <ThemedText variant="caption">{data.stats ? `${data.stats.toRead}` : '—'}</ThemedText>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <ThemedText variant="caption" tone="muted">
                     Dropped
                   </ThemedText>
-                  <ThemedText variant="caption">{typeof data.stats?.dropped === 'number' ? `${data.stats.dropped}` : '—'}</ThemedText>
+                  <ThemedText variant="caption">{data.stats ? `${data.stats.dropped}` : '—'}</ThemedText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <ThemedText variant="caption" tone="muted">
+                    On loan
+                  </ThemedText>
+                  <ThemedText variant="caption">{data.stats ? `${data.stats.onLoan}` : '—'}</ThemedText>
                 </View>
               </View>
             </View>
           </Card>
         </View>
 
-        {/* Challenge + weekly goal */}
-        <View style={{ gap: t.space.m }}>
-          <Card padded={false}>
-            <View style={{ padding: t.space.xl, gap: t.space.l }}>
-              <View style={{ gap: 4 }}>
-                <ThemedText variant="title">
-                  {data.challenge?.yearLabel ? `Book Challenge ${data.challenge.yearLabel}` : 'Book Challenge'}
-                </ThemedText>
-                <ThemedText tone="muted">You are ahead of schedule! Keep the momentum.</ThemedText>
-              </View>
-
-              <View style={{ gap: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                  <ThemedText variant="headline" style={{ fontSize: Math.round(t.typography.size.headerTitle * 0.9 * scale) }}>
-                    {typeof data.challenge?.current === 'number' ? `${data.challenge.current}` : '—'}
-                  </ThemedText>
-                  <ThemedText tone="muted">
-                    / {typeof data.challenge?.target === 'number' ? `${data.challenge.target}` : '—'} books
-                  </ThemedText>
-                </View>
-
-                <ProgressBar
-                  value={
-                    typeof data.challenge?.current === 'number' && typeof data.challenge?.target === 'number' && data.challenge.target > 0
-                      ? data.challenge.current / data.challenge.target
-                      : null
-                  }
-                />
-              </View>
-            </View>
-          </Card>
-
-          <Card padded={false}>
-            <View
-              style={{
-                padding: t.space.xl,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: t.space.l,
-              }}
-            >
-              <View style={{ flex: 1, gap: 4 }}>
-                <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                  {data.weeklyGoal?.label ?? 'Weekly Reading Goal'}
-                </ThemedText>
-                <ThemedText variant="title">{data.weeklyGoal?.valueText ?? '—'}</ThemedText>
-              </View>
-
-              <Button variant="secondary" onPress={data.weeklyGoal?.onPress ?? (() => {})}>
-                {data.weeklyGoal?.ctaLabel ?? 'Edit'}
+        {/* Recently updated */}
+        {data.recentBooks.length ? (
+          <View style={{ gap: t.space.m }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <ThemedText variant="caption" tone="muted" style={{ letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                Recently updated
+              </ThemedText>
+              <Button
+                variant="link"
+                onPress={() => router.push('/my-books')}
+                style={{ paddingVertical: 0, alignSelf: 'flex-end' }}
+                labelStyle={{ letterSpacing: 1.2, textTransform: 'uppercase' }}
+              >
+                Library
               </Button>
             </View>
-          </Card>
-        </View>
 
-        <Button variant="primary" onPress={() => router.push('/my-books')} style={{ borderRadius: 14 }}>
-          Update progress
-        </Button>
+            <View style={{ gap: t.space.m }}>
+              {data.recentBooks.map((b) => {
+                const thumb = Math.round(52 * scale);
+                return (
+                  <Card key={b.id} padded={false} style={{ overflow: 'hidden' }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${b.title}`}
+                      onPress={() => router.push({ pathname: '/book-detail', params: { id: b.id } } as Href)}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+                    >
+                      <View style={{ padding: t.space.l, flexDirection: 'row', gap: t.space.m, alignItems: 'center' }}>
+                        <View
+                          style={{
+                            width: thumb,
+                            height: Math.round(thumb * 1.35),
+                            borderRadius: 10,
+                            backgroundColor: scheme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(31, 26, 22, 0.06)',
+                            borderWidth: 1,
+                            borderColor: c.border,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {b.coverUri ? (
+                            <Image source={{ uri: b.coverUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                          ) : (
+                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                              <Ionicons name="book-outline" size={20} color={c.icon} />
+                            </View>
+                          )}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                          <ThemedText variant="title" numberOfLines={2}>
+                            {b.title}
+                          </ThemedText>
+                          <ThemedText variant="caption" tone="muted" numberOfLines={1}>
+                            {b.author?.trim() || 'Unknown author'} · {formatRelativeUpdated(b.updatedAt)}
+                          </ThemedText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={c.icon} />
+                      </View>
+                    </Pressable>
+                  </Card>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
+        <View style={{ gap: t.space.m }}>
+          <Button variant="primary" onPress={() => router.push('/my-books')} style={{ borderRadius: 14 }}>
+            Open my library
+          </Button>
+          {!data.stats && !data.loading ? (
+            <Button variant="secondary" onPress={() => router.push('/add-book')} style={{ borderRadius: 14 }}>
+              Add a book
+            </Button>
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

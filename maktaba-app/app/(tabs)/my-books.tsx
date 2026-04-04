@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type Href, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -11,7 +11,7 @@ import { AppName } from '@/components/AppName';
 import { BrandFonts, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
-import { listBooks } from '@/lib/db/books';
+import { listBooks } from '@/middleware';
 
 type BookListItem = {
   id: string;
@@ -22,7 +22,27 @@ type BookListItem = {
   pages: number | null;
   status: string;
   updatedAt: number;
+  borrowed: boolean;
+  borrowedBy: string | null;
 };
+
+type ShelfFilter = 'all' | 'tbr' | 'inProgress' | 'finished' | 'dropped' | 'borrowed';
+
+const SHELF_FILTERS: { id: ShelfFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'tbr', label: 'TBR' },
+  { id: 'borrowed', label: 'On loan' },
+  { id: 'inProgress', label: 'In progress' },
+  { id: 'finished', label: 'Finished' },
+  { id: 'dropped', label: 'Dropped' },
+];
+
+function parseShelfFilter(raw: string | string[] | undefined): ShelfFilter | null {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (!v) return null;
+  const allowed = new Set(SHELF_FILTERS.map((f) => f.id));
+  return allowed.has(v as ShelfFilter) ? (v as ShelfFilter) : null;
+}
 
 function isPrefetchableRemoteCoverUri(uri: string) {
   const trimmed = uri.trim();
@@ -55,24 +75,13 @@ export default function MyBooksScreen() {
   const c = Colors[scheme];
   const t = useTokens();
   const router = useRouter();
+  const { filter: filterParam } = useLocalSearchParams<{ filter?: string | string[] }>();
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'inProgress' | 'finished' | 'dropped'>('all');
+  const [activeFilter, setActiveFilter] = useState<ShelfFilter>('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [books, setBooks] = useState<BookListItem[]>([]);
   const [loading, setLoading] = useState(false);
-
-  const filters = useMemo(
-    () =>
-      [
-        { id: 'all', label: 'All' },
-        { id: 'unread', label: 'Unread' },
-        { id: 'inProgress', label: 'In progress' },
-        { id: 'finished', label: 'Finished' },
-        { id: 'dropped', label: 'Drop' },
-      ] as const,
-    []
-  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +97,8 @@ export default function MyBooksScreen() {
         pages: (typeof r.pages === 'number' ? r.pages : r.pages == null ? null : Number(r.pages)) as number | null,
         status: String(r.status ?? 'tbr'),
         updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Number(r.updatedAt ?? Date.now()),
+        borrowed: Boolean(r.borrowed),
+        borrowedBy: (r.borrowedBy ?? null) as string | null,
       }));
 
       setBooks(normalized);
@@ -105,6 +116,11 @@ export default function MyBooksScreen() {
     }, [load])
   );
 
+  useEffect(() => {
+    const next = parseShelfFilter(filterParam);
+    if (next) setActiveFilter(next);
+  }, [filterParam]);
+
   const displayedBooks = useMemo(() => {
     const q = query.trim().toLowerCase();
     let out = books;
@@ -112,10 +128,11 @@ export default function MyBooksScreen() {
       out = out.filter((b) => (b.title ?? '').toLowerCase().includes(q) || (b.author ?? '').toLowerCase().includes(q) || (b.isbn ?? '').includes(q));
     }
 
-    // Placeholder mapping for your existing filter UI (until you implement real reading statuses)
-    if (activeFilter !== 'all') {
-      const statusMap: Record<Exclude<typeof activeFilter, 'all'>, string> = {
-        unread: 'tbr',
+    if (activeFilter === 'borrowed') {
+      out = out.filter((b) => b.borrowed);
+    } else if (activeFilter !== 'all') {
+      const statusMap: Record<Exclude<ShelfFilter, 'all' | 'borrowed'>, string> = {
+        tbr: 'tbr',
         inProgress: 'reading',
         finished: 'read',
         dropped: 'dropped',
@@ -126,6 +143,13 @@ export default function MyBooksScreen() {
 
     return out;
   }, [activeFilter, books, query]);
+
+  const emptyFilterMessage =
+    activeFilter === 'tbr'
+      ? 'Nothing on your TBR yet. Mark a book as “To read” or add a new one.'
+      : activeFilter === 'borrowed'
+        ? 'No books are marked on loan. Toggle “On loan” on a book’s detail page.'
+        : 'No books match this filter.';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
@@ -210,7 +234,7 @@ export default function MyBooksScreen() {
         </Card>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.space.xl }}>
-          {filters.map((f) => {
+          {SHELF_FILTERS.map((f) => {
             const selected = activeFilter === f.id;
             return (
               <Pressable
@@ -299,7 +323,14 @@ export default function MyBooksScreen() {
         </View>
 
         {/* Books list */}
-        {displayedBooks.length ? (
+        {!displayedBooks.length && books.length > 0 ? (
+          <Card>
+            <View style={{ gap: 6 }}>
+              <ThemedText variant="title">No matches</ThemedText>
+              <ThemedText tone="muted">{emptyFilterMessage}</ThemedText>
+            </View>
+          </Card>
+        ) : displayedBooks.length ? (
           <View style={{ gap: t.space.m }}>
             {displayedBooks.map((b) => {
               const coverW = view === 'grid' ? 140 : 62;
@@ -353,6 +384,23 @@ export default function MyBooksScreen() {
                       <ThemedText tone="muted" numberOfLines={1}>
                         {b.author ?? 'Unknown author'}
                       </ThemedText>
+                      {b.borrowed ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                          <View
+                            style={{
+                              alignSelf: 'flex-start',
+                              paddingHorizontal: t.space.s,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                              backgroundColor: c.primarySoft,
+                            }}
+                          >
+                            <ThemedText variant="caption" style={{ color: c.primary, fontWeight: '600' }}>
+                              On loan{b.borrowedBy ? ` · ${b.borrowedBy}` : ''}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      ) : null}
                       <ThemedText variant="caption" tone="muted">
                         {b.isbn ? `ISBN: ${b.isbn}` : ''}
                         {b.pages ? `  ·  ${b.pages} pages` : ''}

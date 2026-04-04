@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
-import type { OpenLibraryBook } from '@/lib/openlibrary';
+import type { OpenLibraryBook } from '@/middleware';
 
 type Props = {
   book: OpenLibraryBook;

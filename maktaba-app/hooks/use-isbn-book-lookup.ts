@@ -3,9 +3,12 @@ import { Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
-import { addBook } from '@/lib/db/books';
-import { validateIsbnCandidate } from '@/lib/isbn';
-import { fetchBookByIsbn, type OpenLibraryBook } from '@/lib/openlibrary';
+import {
+  fetchBookByIsbn,
+  saveOpenLibraryBook,
+  validateIsbnCandidate,
+  type OpenLibraryBook,
+} from '@/middleware';
 
 function prefetchCoverIfNeeded(coverUrl?: string | null) {
   const uri = typeof coverUrl === 'string' ? coverUrl.trim() : '';
@@ -80,30 +83,16 @@ export function useIsbnBookLookup() {
 
   async function savePreview() {
     if (!preview) return;
-    const id =
-      typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID() : `book_${Date.now()}`;
-
     try {
-      await addBook({
-        id,
-        isbn: preview.isbn,
-        title: preview.subtitle ? `${preview.title}: ${preview.subtitle}` : preview.title,
-        author: preview.authors?.length ? preview.authors.join(', ') : null,
-        pages: preview.numberOfPages ?? null,
-        description: preview.description ?? null,
-        genre: preview.genre ?? null,
-        coverUri: preview.coverUrl ?? null,
-        status: 'tbr',
-      });
-
+      const result = await saveOpenLibraryBook(preview);
+      if (result === 'duplicate_db') {
+        Alert.alert('Already added', 'This ISBN is already in your library.');
+        return;
+      }
       Alert.alert('Saved', 'Book added to your library.');
       router.back();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed';
-      if (msg.toLowerCase().includes('unique') || msg.toLowerCase().includes('constraint')) {
-        Alert.alert('Already added', 'This ISBN is already in your library.');
-        return;
-      }
       Alert.alert('Could not save', msg);
     }
   }

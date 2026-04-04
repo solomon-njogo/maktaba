@@ -109,7 +109,7 @@ export default function AddBookScreen() {
             Add a Book
           </ThemedText>
           <ThemedText tone="muted" style={{ fontSize: subtitleSize }}>
-            Search by title, author, or ISBN
+            Search by title, author, or ISBN. Scan or enter multiple ISBNs, then review and approve them on one screen.
           </ThemedText>
         </View>
 

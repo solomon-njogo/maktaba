@@ -1,8 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Switch,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -11,7 +19,8 @@ import { ThemedText } from '@/components/ThemedText';
 import { BrandFonts, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTokens } from '@/hooks/use-tokens';
-import { getBookById } from '@/lib/db/books';
+import { getBookById, patchBookReading } from '@/middleware';
+import type { BookStatus } from '@/middleware/types';
 
 type BookRow = NonNullable<Awaited<ReturnType<typeof getBookById>>>;
 
@@ -33,6 +42,20 @@ function statusLabel(status: string) {
     dropped: 'Dropped',
   };
   return map[status] ?? status;
+}
+
+const READING_STATUSES: { value: BookStatus; label: string }[] = [
+  { value: 'buy', label: 'Want to buy' },
+  { value: 'tbr', label: 'To read' },
+  { value: 'reading', label: 'Reading' },
+  { value: 'read', label: 'Finished' },
+  { value: 'dropped', label: 'Dropped' },
+];
+
+function normalizeBookStatus(raw: string | undefined | null): BookStatus {
+  const s = String(raw ?? 'tbr');
+  if (READING_STATUSES.some((x) => x.value === s)) return s as BookStatus;
+  return 'tbr';
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -63,6 +86,9 @@ export default function BookDetailScreen() {
 
   const [book, setBook] = useState<BookRow | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [readingBusy, setReadingBusy] = useState(false);
+  const [borrowerName, setBorrowerName] = useState('');
+  const borrowerSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -83,6 +109,67 @@ export default function BookDetailScreen() {
     useCallback(() => {
       void load();
     }, [load])
+  );
+
+  useEffect(() => {
+    if (book) {
+      setBorrowerName(book.borrowedBy?.trim() ?? '');
+    }
+  }, [book?.id, book?.borrowedBy]);
+
+  useEffect(
+    () => () => {
+      if (borrowerSaveTimer.current) clearTimeout(borrowerSaveTimer.current);
+    },
+    []
+  );
+
+  const scheduleBorrowerPersist = useCallback(
+    (name: string) => {
+      if (!id) return;
+      if (borrowerSaveTimer.current) clearTimeout(borrowerSaveTimer.current);
+      borrowerSaveTimer.current = setTimeout(() => {
+        borrowerSaveTimer.current = null;
+        void (async () => {
+          await patchBookReading(id, { borrowedBy: name.trim() || null });
+          await load();
+        })();
+      }, 500);
+    },
+    [id, load]
+  );
+
+  const onPickStatus = useCallback(
+    async (status: BookStatus) => {
+      if (!id || !book || normalizeBookStatus(String(book.status)) === status) return;
+      setReadingBusy(true);
+      try {
+        await patchBookReading(id, { status });
+        await load();
+      } finally {
+        setReadingBusy(false);
+      }
+    },
+    [book, id, load]
+  );
+
+  const onBorrowedToggle = useCallback(
+    async (value: boolean) => {
+      if (!id) return;
+      setReadingBusy(true);
+      try {
+        if (value) {
+          await patchBookReading(id, { borrowed: true, borrowedBy: borrowerName.trim() || null });
+        } else {
+          await patchBookReading(id, { borrowed: false });
+          setBorrowerName('');
+        }
+        await load();
+      } finally {
+        setReadingBusy(false);
+      }
+    },
+    [borrowerName, id, load]
   );
 
   const maxContent = Math.min(width - t.space.xl * 2, t.breakpoints.tablet - 80);
@@ -133,7 +220,7 @@ export default function BookDetailScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: t.space.xxl }}>
           <ActivityIndicator size="large" color={c.primary} />
         </View>
-      ) : !id || book === null ? (
+      ) : !id || book == null ? (
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -245,9 +332,119 @@ export default function BookDetailScreen() {
 
           <Card>
             <View style={{ gap: t.space.l }}>
-              <ThemedText variant="label">Reading</ThemedText>
-              <DetailRow label="Status" value={statusLabel(String(book.status ?? 'tbr'))} />
-              <DetailRow label="Borrowed" value={book.borrowed ? 'Yes' : 'No'} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <ThemedText variant="label">Reading</ThemedText>
+                {readingBusy ? <ActivityIndicator size="small" color={c.primary} /> : null}
+              </View>
+
+              <View style={{ gap: t.space.xs }}>
+                <ThemedText variant="caption" tone="muted">
+                  Status
+                </ThemedText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.space.s }}>
+                  {READING_STATUSES.map(({ value, label }) => {
+                    const current = normalizeBookStatus(String(book.status));
+                    const selected = current === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`Set status to ${label}`}
+                        disabled={readingBusy}
+                        onPress={() => void onPickStatus(value)}
+                        style={({ pressed }) => [
+                          {
+                            paddingVertical: t.space.s,
+                            paddingHorizontal: t.space.m,
+                            borderRadius: t.radius.m,
+                            borderWidth: 1,
+                            borderColor: selected ? c.primary : c.border,
+                            backgroundColor: selected ? c.primarySoft : c.card,
+                            opacity: pressed || readingBusy ? 0.85 : 1,
+                          },
+                        ]}
+                      >
+                        <ThemedText
+                          variant="caption"
+                          style={{
+                            color: selected ? c.primary : c.text,
+                            fontFamily: BrandFonts.manrope.semiBold,
+                          }}
+                        >
+                          {label}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: t.space.m,
+                }}
+              >
+                <View style={{ flex: 1, gap: t.space.xs }}>
+                  <ThemedText variant="body" style={{ color: c.text }}>
+                    On loan
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="muted">
+                    Someone else has this copy
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={!!book.borrowed}
+                  onValueChange={(v) => void onBorrowedToggle(v)}
+                  disabled={readingBusy}
+                  trackColor={{ false: c.border, true: c.primarySoft }}
+                  thumbColor={book.borrowed ? c.primary : c.card}
+                />
+              </View>
+
+              {book.borrowed ? (
+                <View style={{ gap: t.space.xs }}>
+                  <ThemedText variant="caption" tone="muted">
+                    Borrower name
+                  </ThemedText>
+                  <TextInput
+                    value={borrowerName}
+                    editable={!readingBusy}
+                    onChangeText={(t) => {
+                      setBorrowerName(t);
+                      scheduleBorrowerPersist(t);
+                    }}
+                    onBlur={() => {
+                      if (borrowerSaveTimer.current) {
+                        clearTimeout(borrowerSaveTimer.current);
+                        borrowerSaveTimer.current = null;
+                      }
+                      void (async () => {
+                        await patchBookReading(id!, { borrowedBy: borrowerName.trim() || null });
+                        await load();
+                      })();
+                    }}
+                    placeholder="Who has the book?"
+                    placeholderTextColor={c.placeholder}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      borderRadius: t.radius.m,
+                      paddingVertical: t.space.m,
+                      paddingHorizontal: t.space.m,
+                      fontFamily: BrandFonts.manrope.regular,
+                      fontSize: t.typography.size.xl,
+                      lineHeight: t.typography.lineHeight.m,
+                      color: c.text,
+                      backgroundColor: c.card,
+                    }}
+                  />
+                </View>
+              ) : null}
+
               {book.borrowed ? (
                 <>
                   {formatDate(book.startDate) ? <DetailRow label="Borrowed from" value={formatDate(book.startDate)!} /> : null}

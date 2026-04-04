@@ -1,6 +1,6 @@
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-export type BookStatus = 'buy' | 'tbr' | 'read';
+export type BookStatus = 'buy' | 'tbr' | 'read' | 'reading' | 'dropped';
 
 export const books = sqliteTable(
   'books',
@@ -17,6 +17,7 @@ export const books = sqliteTable(
     status: text('status').$type<BookStatus>().notNull().default('tbr'),
 
     borrowed: integer('borrowed', { mode: 'boolean' }).notNull().default(false),
+    borrowedBy: text('borrowed_by'),
     startDate: integer('start_date'), // stored as epoch ms (nullable)
     endDate: integer('end_date'), // stored as epoch ms (nullable)
 
@@ -27,4 +28,3 @@ export const books = sqliteTable(
     isbnUnique: uniqueIndex('books_isbn_unique').on(table.isbn),
   })
 );
-

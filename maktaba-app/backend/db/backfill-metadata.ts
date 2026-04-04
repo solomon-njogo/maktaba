@@ -1,6 +1,6 @@
-import { fetchBookByIsbn } from '@/lib/openlibrary';
+import { fetchBookByIsbn } from '../openlibrary';
 
-import { listBooks, updateBookMetadata, type BookMetadataPatch } from '@/lib/db/books';
+import { listBooks, updateBookMetadata, type BookMetadataPatch } from './books';
 
 /**
  * Fetches Open Library data for each book that has an ISBN and fills only columns that are empty.

@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { drizzle } from 'drizzle-orm/expo-sqlite/driver.js';
+import { drizzle } from 'drizzle-orm/expo-sqlite/driver';
 
 let dbPromise: Promise<ReturnType<typeof drizzle>> | null = null;
 
@@ -30,6 +30,12 @@ async function ensureSchema(rawDb: SQLite.SQLiteDatabase) {
 
   // Indexes
   await rawDb.execAsync(`CREATE UNIQUE INDEX IF NOT EXISTS books_isbn_unique ON books(isbn);`);
+
+  const cols = await rawDb.getAllAsync<{ name: string }>('PRAGMA table_info(books);');
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has('borrowed_by')) {
+    await rawDb.execAsync('ALTER TABLE books ADD COLUMN borrowed_by TEXT;');
+  }
 }
 
 export async function getDb() {
@@ -43,4 +49,3 @@ export async function getDb() {
 
   return dbPromise;
 }
-
