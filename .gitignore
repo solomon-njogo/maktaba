@@ -1,5 +1,1 @@
-node_modules/
-dist/
-.env
-.maktaba-daily-fill.json
-*.js.map
+.vercel
