@@ -8,8 +8,9 @@ export default async function handler(
 ) {
   return response.status(200).json({
     status: 'healthy',
-    message: 'Central ecosystem backend core is running.',
-    timestamp: new Date().toISOString()
+    message: 'Central maktaba backend core is running.',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
   });
 }
 
