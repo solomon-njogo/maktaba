@@ -9,8 +9,9 @@ export default base;
 
 // Define an interface matching your Airtable table column names
 export interface BookRecord {
-  Title: string;
-  Author: string;
-  Status: 'Reading' | 'Completed' | 'Backlog';
-  DateAdded?: string;
-}
+    Title: string;
+    Author: string;
+    ISBN?: string;                         // Added matching your table
+    Status: 'Todo' | 'In progress' | 'Done'; // Update these to match your actual Status dropdown options
+    'Start date'?: string;                 // Fixed to match "Start date" exactly
+  }
