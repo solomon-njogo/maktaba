@@ -23,6 +23,8 @@ export const metadata: Metadata = {
     "A minimal, high-contrast tracker for a personal physical library.",
 }
 
+export const dynamic = "force-dynamic"
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html

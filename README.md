@@ -30,16 +30,29 @@ This repository implements a flat, code-adjacent documentation framework. Explor
 
 ## Local development
 
-Run the Express API and the Next.js app together:
+The Next.js app in `src/` serves both the UI and `/api/*` Route Handlers. One process is enough:
 
 ```bash
-npm run dev
-cd src && npm run dev
+cp src/.env.example src/.env.local
+# fill in Airtable and Google Books keys
+cd src && npm install && npm run dev
 ```
 
-Express listens on `http://localhost:5000`. Next.js (port 3000) proxies `/api/*` to that origin via `API_URL` (see `src/.env.example`).
+Or from the repo root: `npm run dev`.
 
-ISBN lookup uses Google Books and Open Library together. The first catalog that returns a match wins. Put `GOOGLE_BOOKS_API_KEY` in `src/.env.local` (the Express API loads that file); unauthenticated Google Books requests are often rate-limited.
+ISBN lookup uses Google Books and Open Library together. The first catalog that returns a match wins. Put `GOOGLE_BOOKS_API_KEY` in `src/.env.local`; unauthenticated Google Books requests are often rate-limited.
+
+## Deploy on Vercel
+
+1. Set the project **Root Directory** to `src` (Settings → General).
+2. Framework preset: Next.js (`src/vercel.json` already sets `"framework": "nextjs"`).
+3. Add environment variables for Production and Preview:
+   - `AIRTABLE_ACCESS_TOKEN`
+   - `AIRTABLE_BASE_ID`
+   - `GOOGLE_BOOKS_API_KEY`
+4. Do not set `API_URL` to `localhost`.
+
+If Root Directory stays at the git root, the repo-root `vercel.json` installs and builds via `src/`. Prefer Root Directory = `src`.
 
 ---
 > **Engineering Note:** Keep documentation close to the source code. If an engineering sprint alters a database relationship, an acquisition endpoint, or an integration interface, update the corresponding markdown spec within that exact commit.

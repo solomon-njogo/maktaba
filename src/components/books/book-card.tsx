@@ -1,7 +1,7 @@
 import Image from "next/image"
 import { BookOpenIcon } from "lucide-react"
 
-import type { FormattedBookResponse } from "@/api/types/books"
+import type { FormattedBookResponse } from "@/types/books"
 import { StatusBadge } from "@/components/books/status-badge"
 import {
   Card,
@@ -15,10 +15,11 @@ import { cn } from "@/lib/utils"
 
 export type BookCardData = Pick<
   FormattedBookResponse,
-  "Title" | "Author" | "Status" | "Borrowed" | "BorrowedBy"
-> & {
-  coverUrl?: string
-}
+  "Title" | "Author" | "Status"
+> &
+  Partial<Pick<FormattedBookResponse, "Borrowed" | "BorrowedBy">> & {
+    coverUrl?: string
+  }
 
 type BookCardProps = {
   book?: BookCardData

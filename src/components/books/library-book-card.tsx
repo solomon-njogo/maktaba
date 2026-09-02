@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { MoreHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import type { BookStatus, FormattedBookResponse } from "@/api/types/books"
+import type { BookStatus, FormattedBookResponse } from "@/types/books"
 import { BookCard } from "@/components/books/book-card"
 import {
   AlertDialog,

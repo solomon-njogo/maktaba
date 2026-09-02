@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { FormattedBookResponse } from "@/api/types/books"
+import type { FormattedBookResponse } from "@/types/books"
 
 export type BookStatus = NonNullable<FormattedBookResponse["Status"]>
 

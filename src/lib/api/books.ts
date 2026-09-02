@@ -1,4 +1,4 @@
-import type { BookStatus, BookUpdatePayload, FormattedBookResponse } from "@/api/types/books"
+import type { BookStatus, BookUpdatePayload, FormattedBookResponse } from "@/types/books"
 
 export class ApiError extends Error {
   status: number
@@ -10,15 +10,8 @@ export class ApiError extends Error {
   }
 }
 
-function apiBase() {
-  if (typeof window === "undefined") {
-    return process.env.API_URL ?? "http://localhost:5000"
-  }
-  return ""
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase()}${path}`, {
+  const response = await fetch(path, {
     ...init,
     headers: {
       Accept: "application/json",

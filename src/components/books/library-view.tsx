@@ -1,7 +1,8 @@
 import type { BookEmptyVariant } from "@/components/books/book-empty"
 import { BookEmpty } from "@/components/books/book-empty"
 import { LibraryBookCard } from "@/components/books/library-book-card"
-import { listBooks, type ListBooksFilters } from "@/lib/api/books"
+import type { ListBooksFilters } from "@/lib/api/books"
+import { listBooks } from "@/lib/server/book.service"
 
 export async function LibraryView({
   title,

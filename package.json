@@ -1,40 +1,21 @@
 {
   "name": "maktaba",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "Personal library tracker",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
-    "start": "node dist/api/index.js",
-    "dev": "nodemon --watch src/api --ext ts --exec \"ts-node --project tsconfig.api.json --transpile-only -r ./src/api/_lib/load-env.ts src/api/index.ts\""
+    "dev": "npm run dev --prefix src",
+    "build": "npm run build --prefix src",
+    "start": "npm run start --prefix src",
+    "lint": "npm run lint --prefix src"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/solomon-njogo/maktaba.git"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/solomon-njogo/maktaba/issues"
   },
-  "homepage": "https://github.com/solomon-njogo/maktaba#readme",
-  "devDependencies": {
-    "@types/airtable": "^0.10.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.9.2",
-    "@vercel/node": "^5.0.0",
-    "nodemon": "^3.1.14",
-    "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
-  },
-  "dependencies": {
-    "airtable": "^0.12.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1"
-  }
+  "homepage": "https://github.com/solomon-njogo/maktaba#readme"
 }
