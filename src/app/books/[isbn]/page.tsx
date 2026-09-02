@@ -2,7 +2,8 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { BookDetail } from "@/components/books/book-detail"
-import { ApiError, getBook } from "@/lib/api/books"
+import { getLibraryBookByIsbn } from "@/lib/server/book.service"
+import { HttpError } from "@/lib/server/http-error"
 
 type BookPageProps = {
   params: Promise<{ isbn: string }>
@@ -13,7 +14,7 @@ export async function generateMetadata({
 }: BookPageProps): Promise<Metadata> {
   const { isbn } = await params
   try {
-    const book = await getBook(isbn)
+    const book = await getLibraryBookByIsbn(isbn)
     return { title: `${book.Title} · Maktaba` }
   } catch {
     return { title: "Book · Maktaba" }
@@ -24,10 +25,10 @@ export default async function BookPage({ params }: BookPageProps) {
   const { isbn } = await params
 
   try {
-    const book = await getBook(isbn)
+    const book = await getLibraryBookByIsbn(isbn)
     return <BookDetail book={book} />
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (error instanceof HttpError && error.status === 404) {
       notFound()
     }
     const message =
