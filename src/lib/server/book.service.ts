@@ -1,6 +1,7 @@
 import type { FieldSet, Record as AirtableRecord } from "airtable"
 
 import type {
+  BookCreatePayload,
   BookStatus,
   BookUpdatePayload,
   BorrowedFlag,
@@ -9,19 +10,18 @@ import type {
   GoogleBooksVolumeInfo,
   OpenLibraryResponse,
 } from "@/types/books"
+import { cleanIsbnString } from "@/lib/isbn"
 
 import { getAirtableBase } from "./airtable"
 import { HttpError } from "./http-error"
+
+export { cleanIsbnString }
 
 const TABLE_NAME = "Books"
 const VALID_STATUSES: BookStatus[] = ["Reading", "Done", "TBR", "To-Buy"]
 const DATE_ADDED_FIELD = "Date Added"
 
 type AttachmentLike = { url?: string }
-
-export function cleanIsbnString(isbn: string): string {
-  return isbn.replace(/[-\s]/g, "")
-}
 
 function escapeAirtableString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
@@ -390,11 +390,59 @@ function fieldsFromPreview(
   return fields
 }
 
-export async function createBook(isbn: string): Promise<FormattedBookResponse> {
+function fieldsFromManual(isbn: string, extras: BookCreatePayload): FieldSet {
+  const title = extras.Title?.trim()
+  if (!title) {
+    throw new HttpError(400, "Title is required.")
+  }
+  if (extras.Status && !VALID_STATUSES.includes(extras.Status)) {
+    throw new HttpError(400, "Invalid status.")
+  }
+  if (extras.Borrowed && extras.Borrowed !== "Yes" && extras.Borrowed !== "No") {
+    throw new HttpError(400, "Borrowed must be Yes or No.")
+  }
+
+  const fields: FieldSet = {
+    Title: title,
+    Author: extras.Author?.trim() ?? "",
+    ISBN: isbn,
+    Status: extras.Status ?? "TBR",
+    Borrowed: extras.Borrowed ?? "No",
+  }
+
+  if (extras.Genre !== undefined) fields.Genre = extras.Genre.trim()
+  if (extras.StartDate) {
+    fields["Start Date"] = extras.StartDate
+    fields.StartDate = extras.StartDate
+  }
+  if (extras.EndDate) {
+    fields["End Date"] = extras.EndDate
+    fields.EndDate = extras.EndDate
+  }
+  if (extras.BorrowedBy !== undefined) fields.BorrowedBy = extras.BorrowedBy
+  if (extras.BorrowedOn !== undefined) fields.BorrowedOn = extras.BorrowedOn
+  if (extras.BorrowedUntil !== undefined) {
+    fields.BorrowedUntil = extras.BorrowedUntil
+  }
+  if (fields.Borrowed === "No") {
+    fields.BorrowedBy = ""
+    fields.BorrowedOn = ""
+    fields.BorrowedUntil = ""
+  }
+
+  return fields
+}
+
+export async function createBook(
+  isbn: string,
+  extras?: BookCreatePayload
+): Promise<FormattedBookResponse> {
   const cleanIsbn = cleanIsbnString(isbn)
   if (!cleanIsbn) {
     throw new HttpError(400, "A valid ISBN is required.")
   }
+
+  const manual = Boolean(extras?.Title?.trim())
 
   const records = await findRecordsByIsbn(cleanIsbn)
   const active = records.find((record) => !isDeleted(record.get("DeletedAt")))
@@ -407,15 +455,30 @@ export async function createBook(isbn: string): Promise<FormattedBookResponse> {
 
   const deleted = records.find((record) => isDeleted(record.get("DeletedAt")))
   if (deleted) {
-    const restored = await getAirtableBase()(TABLE_NAME).update(deleted.id, {
-      DeletedAt: "",
-      Status: "TBR",
-      Borrowed: "No",
-      BorrowedBy: "",
-      BorrowedOn: "",
-      BorrowedUntil: "",
-    } as Partial<FieldSet>)
+    const restoredFields = (
+      manual
+        ? { DeletedAt: "", ...fieldsFromManual(cleanIsbn, extras ?? {}) }
+        : {
+            DeletedAt: "",
+            Status: "TBR",
+            Borrowed: "No",
+            BorrowedBy: "",
+            BorrowedOn: "",
+            BorrowedUntil: "",
+          }
+    ) as Partial<FieldSet>
+    const restored = await getAirtableBase()(TABLE_NAME).update(
+      deleted.id,
+      restoredFields
+    )
     return formatRecord(restored, true)
+  }
+
+  if (manual) {
+    const created = await getAirtableBase()(TABLE_NAME).create(
+      fieldsFromManual(cleanIsbn, extras ?? {})
+    )
+    return formatRecord(created, true)
   }
 
   const preview = await lookupIsbn(cleanIsbn)
