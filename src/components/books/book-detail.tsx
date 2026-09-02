@@ -12,7 +12,7 @@ import type {
   BookUpdatePayload,
   BorrowedFlag,
   FormattedBookResponse,
-} from "@/api/types/books"
+} from "@/types/books"
 import { StatusBadge } from "@/components/books/status-badge"
 import {
   AlertDialog,

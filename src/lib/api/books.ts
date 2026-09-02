@@ -1,4 +1,4 @@
-import type { BookStatus, BookUpdatePayload, FormattedBookResponse } from "@/api/types/books"
+import type { BookStatus, BookUpdatePayload, FormattedBookResponse } from "@/types/books"
 
 export class ApiError extends Error {
   status: number

@@ -22,7 +22,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { ApiError, addBook, lookupBook } from "@/lib/api/books"
-import type { FormattedBookResponse } from "@/api/types/books"
+import type { FormattedBookResponse } from "@/types/books"
 
 export function AddBookSheet() {
   const router = useRouter()
