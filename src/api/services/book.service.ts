@@ -7,11 +7,14 @@ import type {
   BookUpdatePayload,
   BorrowedFlag,
   FormattedBookResponse,
+  GoogleBooksResponse,
+  GoogleBooksVolumeInfo,
   OpenLibraryResponse,
 } from "../types/books";
 
 const TABLE_NAME = "Books";
 const VALID_STATUSES: BookStatus[] = ["Reading", "Done", "TBR", "To-Buy"];
+const DATE_ADDED_FIELD = "Date Added";
 
 type AttachmentLike = { url?: string };
 
@@ -27,8 +30,56 @@ function isbnFormula(isbn: string): string {
   return `{ISBN} = '${escapeAirtableString(isbn)}'`;
 }
 
+const OPEN_LIBRARY_TIMEOUT_MS = 4_000;
+const GOOGLE_BOOKS_TIMEOUT_MS = 10_000;
+
+const CATALOG_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": "Maktaba/1.0 (https://github.com/solomon-njogo/maktaba)",
+};
+
 function coverUrlFromIsbn(isbn: string): string {
   return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+}
+
+function toHttpsUrl(value: string): string {
+  return value.replace(/^http:\/\//i, "https://");
+}
+
+function googleBooksCover(info: GoogleBooksVolumeInfo): string | undefined {
+  const links = info.imageLinks;
+  if (!links) return undefined;
+  const url =
+    links.extraLarge ??
+    links.large ??
+    links.medium ??
+    links.small ??
+    links.thumbnail ??
+    links.smallThumbnail;
+  return url ? toHttpsUrl(url) : undefined;
+}
+
+async function fetchJson(
+  url: string,
+  source: string,
+  timeoutMs: number
+): Promise<{ ok: true; data: unknown } | { ok: false; unavailable: true }> {
+  try {
+    const apiResponse = await fetch(url, {
+      headers: CATALOG_HEADERS,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!apiResponse.ok) {
+      console.warn(`${source} responded with status ${apiResponse.status}`);
+      return { ok: false, unavailable: true };
+    }
+    return { ok: true, data: await apiResponse.json() };
+  } catch (error: unknown) {
+    console.warn(
+      `${source} is unreachable${error instanceof Error ? `: ${error.message}` : "."}`
+    );
+    return { ok: false, unavailable: true };
+  }
 }
 
 function asStringArray(value: unknown): string[] {
@@ -85,7 +136,10 @@ function formatRecord(
     BorrowedBy: asOptionalString(record.get("BorrowedBy")),
     BorrowedOn: asOptionalString(record.get("BorrowedOn")),
     BorrowedUntil: asOptionalString(record.get("BorrowedUntil")),
-    DateAdded: asOptionalString(record.get("DateAdded")),
+    DateAdded:
+      asOptionalString(record.get(DATE_ADDED_FIELD)) ??
+      asOptionalString(record.get("DateAdded")) ??
+      asOptionalString(record._rawJson?.createdTime)?.slice(0, 10),
     Genre: asOptionalString(record.get("Genre")),
     Thumbnail: thumbnail,
     coverUrl: thumbnail,
@@ -148,43 +202,139 @@ export async function listBooks(filters?: {
     .sort((a, b) => (b.DateAdded ?? "").localeCompare(a.DateAdded ?? ""));
 }
 
+type CatalogLookup = {
+  book: FormattedBookResponse | null;
+  unavailable: boolean;
+};
+
 export async function fetchBookFromOpenLibrary(
   isbn: string
-): Promise<FormattedBookResponse | null> {
+): Promise<CatalogLookup> {
   const cleanIsbn = cleanIsbnString(isbn);
   const isbnKey = `ISBN:${cleanIsbn}`;
   const url = `https://openlibrary.org/api/books?bibkeys=${isbnKey}&jscmd=details&format=json`;
+  const result = await fetchJson(url, "Open Library", OPEN_LIBRARY_TIMEOUT_MS);
+  if (!result.ok) return { book: null, unavailable: true };
 
-  const apiResponse = await fetch(url).catch((error: unknown) => {
-    throw new HttpError(
-      502,
-      `Open Library is unreachable${error instanceof Error ? `: ${error.message}` : "."}`
-    );
-  });
-  if (!apiResponse.ok) {
-    throw new HttpError(
-      502,
-      `Open Library API responded with status: ${apiResponse.status}`
+  const data = result.data as OpenLibraryResponse;
+  if (!data?.[isbnKey]?.details) return { book: null, unavailable: false };
+
+  const details = data[isbnKey].details;
+  if (!details.title) return { book: null, unavailable: false };
+
+  const thumbnail = coverUrlFromIsbn(cleanIsbn);
+  return {
+    book: {
+      Title: details.title,
+      Author: details.authors?.map((author) => author.name).join(", ") ?? "",
+      ISBN: cleanIsbn,
+      Status: "TBR",
+      Borrowed: "No",
+      Genre: undefined,
+      Thumbnail: thumbnail,
+      coverUrl: thumbnail,
+      inLibrary: false,
+    },
+    unavailable: false,
+  };
+}
+
+export async function fetchBookFromGoogleBooks(
+  isbn: string
+): Promise<CatalogLookup> {
+  const cleanIsbn = cleanIsbnString(isbn);
+  const params = new URLSearchParams({ q: `isbn:${cleanIsbn}` });
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY?.trim();
+  if (apiKey) {
+    params.set("key", apiKey);
+  } else {
+    console.warn(
+      "GOOGLE_BOOKS_API_KEY is not set. Unauthenticated Google Books requests are often rate-limited (429)."
     );
   }
 
-  const data = (await apiResponse.json()) as OpenLibraryResponse;
-  if (!data?.[isbnKey]?.details) return null;
+  const url = `https://www.googleapis.com/books/v1/volumes?${params.toString()}`;
+  const result = await fetchJson(url, "Google Books", GOOGLE_BOOKS_TIMEOUT_MS);
+  if (!result.ok) return { book: null, unavailable: true };
 
-  const details = data[isbnKey].details;
-  const thumbnail = coverUrlFromIsbn(cleanIsbn);
+  const data = result.data as GoogleBooksResponse;
+  const info = data.items?.find((item) => item.volumeInfo?.title)?.volumeInfo;
+  if (!info?.title) return { book: null, unavailable: false };
 
+  const thumbnail = googleBooksCover(info) ?? coverUrlFromIsbn(cleanIsbn);
   return {
-    Title: details.title,
-    Author: details.authors?.map((author) => author.name).join(", ") ?? "",
-    ISBN: cleanIsbn,
-    Status: "TBR",
-    Borrowed: "No",
-    Genre: undefined,
-    Thumbnail: thumbnail,
-    coverUrl: thumbnail,
-    inLibrary: false,
+    book: {
+      Title: info.title,
+      Author: info.authors?.join(", ") ?? "",
+      ISBN: cleanIsbn,
+      Status: "TBR",
+      Borrowed: "No",
+      Genre: info.categories?.[0],
+      Thumbnail: thumbnail,
+      coverUrl: thumbnail,
+      inLibrary: false,
+    },
+    unavailable: false,
   };
+}
+
+function catalogUnavailableError() {
+  const hasGoogleKey = Boolean(process.env.GOOGLE_BOOKS_API_KEY?.trim());
+  return new HttpError(
+    502,
+    hasGoogleKey
+      ? "Open Library and Google Books are unavailable. Try again shortly."
+      : "Google Books is rate-limited and Open Library is unreachable. Set GOOGLE_BOOKS_API_KEY in src/.env.local (and restart the API)."
+  );
+}
+
+async function fetchBookFromCatalogs(
+  isbn: string
+): Promise<FormattedBookResponse> {
+  const lookups = [
+    fetchBookFromGoogleBooks(isbn),
+    fetchBookFromOpenLibrary(isbn),
+  ];
+
+  return new Promise((resolve, reject) => {
+    let pending = lookups.length;
+    let anyCatalogResponded = false;
+    let settled = false;
+
+    for (const lookup of lookups) {
+      lookup
+        .then(({ book, unavailable }) => {
+          if (settled) return;
+          if (book) {
+            settled = true;
+            resolve(book);
+            return;
+          }
+          if (!unavailable) anyCatalogResponded = true;
+          pending -= 1;
+          if (pending === 0) {
+            reject(
+              anyCatalogResponded
+                ? new HttpError(404, `Book with ISBN ${isbn} not found.`)
+                : catalogUnavailableError()
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          if (settled) return;
+          pending -= 1;
+          if (pending === 0) {
+            reject(
+              anyCatalogResponded
+                ? new HttpError(404, `Book with ISBN ${isbn} not found.`)
+                : error instanceof HttpError
+                  ? error
+                  : catalogUnavailableError()
+            );
+          }
+        });
+    }
+  });
 }
 
 export async function lookupIsbn(isbn: string): Promise<FormattedBookResponse> {
@@ -198,11 +348,7 @@ export async function lookupIsbn(isbn: string): Promise<FormattedBookResponse> {
     return formatRecord(existing, true);
   }
 
-  const remote = await fetchBookFromOpenLibrary(cleanIsbn);
-  if (!remote) {
-    throw new HttpError(404, `Book with ISBN ${cleanIsbn} not found.`);
-  }
-  return remote;
+  return fetchBookFromCatalogs(cleanIsbn);
 }
 
 export async function getLibraryBookByIsbn(
@@ -226,7 +372,6 @@ function fieldsFromPreview(
     ISBN: isbn,
     Status: "TBR",
     Borrowed: "No",
-    DateAdded: new Date().toISOString().slice(0, 10),
   };
 
   if (preview.Genre) fields.Genre = preview.Genre;

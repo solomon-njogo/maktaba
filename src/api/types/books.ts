@@ -39,6 +39,27 @@ export interface OpenLibraryResponse {
   };
 }
 
+export interface GoogleBooksVolumeInfo {
+  title?: string;
+  authors?: string[];
+  categories?: string[];
+  imageLinks?: {
+    extraLarge?: string;
+    large?: string;
+    medium?: string;
+    small?: string;
+    thumbnail?: string;
+    smallThumbnail?: string;
+  };
+}
+
+export interface GoogleBooksResponse {
+  totalItems?: number;
+  items?: Array<{
+    volumeInfo?: GoogleBooksVolumeInfo;
+  }>;
+}
+
 export interface FormattedBookResponse {
   id?: string;
   Title: string;

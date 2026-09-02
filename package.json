@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "node dist/api/index.js",
-    "dev": "nodemon --watch src/api --ext ts --exec \"ts-node --project tsconfig.api.json --transpile-only -r dotenv/config src/api/index.ts\""
+    "dev": "nodemon --watch src/api --ext ts --exec \"ts-node --project tsconfig.api.json --transpile-only -r ./src/api/_lib/load-env.ts src/api/index.ts\""
   },
   "repository": {
     "type": "git",

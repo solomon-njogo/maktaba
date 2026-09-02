@@ -1,3 +1,4 @@
+import "./load-env";
 import Airtable from 'airtable';
 
 // Initialize the Airtable base client using your environment variables

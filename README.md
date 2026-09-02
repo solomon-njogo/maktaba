@@ -39,5 +39,7 @@ cd src && npm run dev
 
 Express listens on `http://localhost:5000`. Next.js (port 3000) proxies `/api/*` to that origin via `API_URL` (see `src/.env.example`).
 
+ISBN lookup uses Google Books and Open Library together. The first catalog that returns a match wins. Put `GOOGLE_BOOKS_API_KEY` in `src/.env.local` (the Express API loads that file); unauthenticated Google Books requests are often rate-limited.
+
 ---
 > **Engineering Note:** Keep documentation close to the source code. If an engineering sprint alters a database relationship, an acquisition endpoint, or an integration interface, update the corresponding markdown spec within that exact commit.
