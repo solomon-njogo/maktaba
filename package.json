@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "node dist/api/index.js",
-    "dev": "nodemon --watch \"api/**/*.ts\" --exec ts-node -r dotenv/config api/index.ts"
+    "dev": "nodemon --watch src/api --ext ts --exec \"ts-node --project tsconfig.api.json --transpile-only -r ./src/api/_lib/load-env.ts src/api/index.ts\""
   },
   "repository": {
     "type": "git",
@@ -23,6 +23,7 @@
   "homepage": "https://github.com/solomon-njogo/maktaba#readme",
   "devDependencies": {
     "@types/airtable": "^0.10.0",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.2",
     "@vercel/node": "^5.0.0",
@@ -32,6 +33,7 @@
   },
   "dependencies": {
     "airtable": "^0.12.2",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   }

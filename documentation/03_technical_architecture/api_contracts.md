@@ -60,7 +60,7 @@ JSON
 ---
 
 ## 🛠️ Endpoint: `POST /v1/book/ISBN-lookup`
-Looks up ISBN and returns relevant data.
+Looks up ISBN and returns relevant data. Catalog metadata is fetched from Open Library and Google Books in parallel; the first successful match is used.
 
 ### Request Format
 * **Headers:** `Content-Type: application/json`
