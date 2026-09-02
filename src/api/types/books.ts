@@ -80,7 +80,12 @@ export interface FormattedBookResponse {
 }
 
 export interface BookUpdatePayload {
+  Title?: string;
+  Author?: string;
+  Genre?: string;
   Status?: BookStatus;
+  StartDate?: string;
+  EndDate?: string;
   Borrowed?: BorrowedFlag;
   BorrowedBy?: string;
   BorrowedOn?: string;

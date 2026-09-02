@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { MoreHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -29,6 +30,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -94,19 +96,40 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
     }
   }
 
+  const href = isbn ? `/books/${encodeURIComponent(isbn)}` : null
+
   return (
     <div className="relative">
-      <BookCard
-        className="pr-10"
-        book={{
-          Title: book.Title,
-          Author: book.Author,
-          Status: book.Status,
-          Borrowed: book.Borrowed,
-          BorrowedBy: book.BorrowedBy,
-          coverUrl: book.coverUrl ?? book.Thumbnail,
-        }}
-      />
+      {href ? (
+        <Link
+          href={href}
+          className="block rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          <BookCard
+            className="pr-10 transition-colors hover:bg-muted/40"
+            book={{
+              Title: book.Title,
+              Author: book.Author,
+              Status: book.Status,
+              Borrowed: book.Borrowed,
+              BorrowedBy: book.BorrowedBy,
+              coverUrl: book.coverUrl ?? book.Thumbnail,
+            }}
+          />
+        </Link>
+      ) : (
+        <BookCard
+          className="pr-10"
+          book={{
+            Title: book.Title,
+            Author: book.Author,
+            Status: book.Status,
+            Borrowed: book.Borrowed,
+            BorrowedBy: book.BorrowedBy,
+            coverUrl: book.coverUrl ?? book.Thumbnail,
+          }}
+        />
+      )}
       {isbn ? (
         <div className="absolute top-3 right-3">
           <DropdownMenu>
@@ -117,37 +140,52 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
               <span className="sr-only">Actions for {book.Title}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Status</DropdownMenuLabel>
-              {STATUSES.map((status) => (
-                <DropdownMenuItem
-                  key={status}
-                  disabled={book.Status === status || pending}
-                  onClick={() => patch(`Marked as ${status}`, { Status: status })}
-                >
-                  {status}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              {book.Borrowed === "Yes" ? (
-                <DropdownMenuItem disabled={pending} onClick={handleReturn}>
-                  Mark returned
-                </DropdownMenuItem>
-              ) : (
+              <DropdownMenuGroup>
                 <DropdownMenuItem
                   disabled={pending}
-                  onClick={() => setBorrowOpen(true)}
+                  onClick={() => router.push(`/books/${encodeURIComponent(isbn)}`)}
                 >
-                  Tag as borrowed
+                  View details
                 </DropdownMenuItem>
-              )}
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={pending}
-                onClick={() => setDeleteOpen(true)}
-              >
-                Remove
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                {STATUSES.map((status) => (
+                  <DropdownMenuItem
+                    key={status}
+                    disabled={book.Status === status || pending}
+                    onClick={() => patch(`Marked as ${status}`, { Status: status })}
+                  >
+                    {status}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                {book.Borrowed === "Yes" ? (
+                  <DropdownMenuItem disabled={pending} onClick={handleReturn}>
+                    Mark returned
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    disabled={pending}
+                    onClick={() => setBorrowOpen(true)}
+                  >
+                    Tag as borrowed
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  Remove
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

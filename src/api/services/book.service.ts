@@ -130,8 +130,12 @@ function formatRecord(
     Author: asOptionalString(record.get("Author")) ?? "",
     ISBN: isbn,
     Status: VALID_STATUSES.includes(status) ? status : "TBR",
-    StartDate: asOptionalString(record.get("StartDate")),
-    EndDate: asOptionalString(record.get("EndDate")),
+    StartDate:
+      asOptionalString(record.get("StartDate")) ??
+      asOptionalString(record.get("Start Date")),
+    EndDate:
+      asOptionalString(record.get("EndDate")) ??
+      asOptionalString(record.get("End Date")),
     Borrowed: (asOptionalString(record.get("Borrowed")) as BorrowedFlag) || "No",
     BorrowedBy: asOptionalString(record.get("BorrowedBy")),
     BorrowedOn: asOptionalString(record.get("BorrowedOn")),
@@ -426,11 +430,37 @@ export async function updateBook(
 
   const fields: FieldSet = {};
 
+  if (patch.Title !== undefined) {
+    const title = patch.Title.trim();
+    if (!title) {
+      throw new HttpError(400, "Title is required.");
+    }
+    fields.Title = title;
+  }
+
+  if (patch.Author !== undefined) {
+    fields.Author = patch.Author.trim();
+  }
+
+  if (patch.Genre !== undefined) {
+    fields.Genre = patch.Genre.trim();
+  }
+
   if (patch.Status !== undefined) {
     if (!VALID_STATUSES.includes(patch.Status)) {
       throw new HttpError(400, "Invalid status.");
     }
     fields.Status = patch.Status;
+  }
+
+  if (patch.StartDate) {
+    fields["Start Date"] = patch.StartDate;
+    fields.StartDate = patch.StartDate;
+  }
+
+  if (patch.EndDate) {
+    fields["End Date"] = patch.EndDate;
+    fields.EndDate = patch.EndDate;
   }
 
   if (patch.Borrowed !== undefined) {
@@ -455,8 +485,35 @@ export async function updateBook(
     throw new HttpError(400, "No valid fields to update.");
   }
 
-  const updated = await airtableBase(TABLE_NAME).update(existing.id, fields);
+  const updated = await updateRecordFields(existing.id, fields);
   return formatRecord(updated, true);
+}
+
+function unknownAirtableField(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("message" in error)) {
+    return null;
+  }
+  const match = String(error.message).match(/Unknown field name: "([^"]+)"/);
+  return match?.[1] ?? null;
+}
+
+async function updateRecordFields(id: string, fields: FieldSet) {
+  const pending: FieldSet = { ...fields };
+
+  while (Object.keys(pending).length > 0) {
+    try {
+      return await airtableBase(TABLE_NAME).update(id, pending);
+    } catch (error) {
+      const name = unknownAirtableField(error);
+      if (name && name in pending) {
+        delete pending[name];
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new HttpError(400, "No valid fields to update.");
 }
 
 export async function softDeleteBook(isbn: string): Promise<FormattedBookResponse> {
