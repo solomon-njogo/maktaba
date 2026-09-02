@@ -1,22 +1,26 @@
-// Define an interface matching your Airtable table column names
+export type BookStatus = "Reading" | "Done" | "TBR" | "To-Buy";
+export type BorrowedFlag = "Yes" | "No";
+
 export interface AirtableBook {
+  id: string;
   Title: string;
-  Publishers: string[];
-  PublishDate: string;
-  ISBN13: string[];
-  ISBN10: string[];
+  Publishers?: string[];
+  PublishDate?: string;
+  ISBN13?: string[];
+  ISBN10?: string[];
   Author: string;
-  ISBN?: string;     
-  Status?: 'Reading' | 'Done' | 'TBR' | 'To-Buy';
-  StartDate?: Date;
-  EndDate?: Date;
-  Borrowed?: 'Yes' | 'No';
+  ISBN?: string;
+  Status?: BookStatus;
+  StartDate?: string;
+  EndDate?: string;
+  Borrowed?: BorrowedFlag;
   BorrowedBy?: string;
-  BorrowedOn?: Date;
-  BorrowedUntil?: Date;
-  DateAdded?: Date;
+  BorrowedOn?: string;
+  BorrowedUntil?: string;
+  DateAdded?: string;
   Genre?: string;
-  Thumbnail?: File;
+  Thumbnail?: string;
+  DeletedAt?: string;
 }
 
 export interface OpenLibraryBookDetails {
@@ -35,19 +39,29 @@ export interface OpenLibraryResponse {
   };
 }
 
-// A clean, unified format your frontend will receive
 export interface FormattedBookResponse {
-    Title: string;
-    Author: string;
-    ISBN?: string;     
-    Status: 'Reading' | 'Done' | 'TBR' | 'To-Buy';
-    StartDate?: Date;
-    EndDate?: Date;
-    Borrowed?: 'Yes' | 'No';
-    BorrowedBy?: string;
-    BorrowedOn?: Date;
-    BorrowedUntil?: Date;
-    DateAdded?: Date;
-    Genre?: string;
-    Thumbnail?: File;
+  id?: string;
+  Title: string;
+  Author: string;
+  ISBN?: string;
+  Status: BookStatus;
+  StartDate?: string;
+  EndDate?: string;
+  Borrowed?: BorrowedFlag;
+  BorrowedBy?: string;
+  BorrowedOn?: string;
+  BorrowedUntil?: string;
+  DateAdded?: string;
+  Genre?: string;
+  Thumbnail?: string;
+  coverUrl?: string;
+  inLibrary: boolean;
+}
+
+export interface BookUpdatePayload {
+  Status?: BookStatus;
+  Borrowed?: BorrowedFlag;
+  BorrowedBy?: string;
+  BorrowedOn?: string;
+  BorrowedUntil?: string;
 }

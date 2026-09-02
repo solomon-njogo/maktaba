@@ -27,4 +27,17 @@ This repository implements a flat, code-adjacent documentation framework. Explor
   * UI design foundations (monochromatic palettes, minimalist geometry) and local machine deployment configurations (`deployment_guide.md`).
 
 ---
+
+## Local development
+
+Run the Express API and the Next.js app together:
+
+```bash
+npm run dev
+cd src && npm run dev
+```
+
+Express listens on `http://localhost:5000`. Next.js (port 3000) proxies `/api/*` to that origin via `API_URL` (see `src/.env.example`).
+
+---
 > **Engineering Note:** Keep documentation close to the source code. If an engineering sprint alters a database relationship, an acquisition endpoint, or an integration interface, update the corresponding markdown spec within that exact commit.

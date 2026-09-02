@@ -8,7 +8,13 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
-export type BookEmptyVariant = "library" | "tbr" | "to-buy" | "borrowed"
+export type BookEmptyVariant =
+  | "library"
+  | "tbr"
+  | "reading"
+  | "done"
+  | "to-buy"
+  | "borrowed"
 
 const COPY: Record<
   BookEmptyVariant,
@@ -22,6 +28,16 @@ const COPY: Record<
   tbr: {
     title: "The TBR queue is empty",
     description: "Tag owned titles as TBR when they are next in the pipeline.",
+    icon: BookmarkIcon,
+  },
+  reading: {
+    title: "Nothing in progress",
+    description: "Tag a title as Reading when it comes off the shelf.",
+    icon: BookOpenIcon,
+  },
+  done: {
+    title: "No finished titles yet",
+    description: "Mark books Done when you close the last page.",
     icon: BookmarkIcon,
   },
   "to-buy": {
