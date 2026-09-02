@@ -1,0 +1,3 @@
+# Express lives at src/api and is not a Vercel Serverless Function.
+# Leaving it in the upload makes Vercel compile it as /api/* and fight Next.js.
+src/api
