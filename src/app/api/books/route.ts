@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import type { BookCreatePayload } from "@/types/books"
 import { createBook, listBooks, requireIsbn } from "@/lib/server/book.service"
 import { jsonError } from "@/lib/server/route-response"
 
@@ -20,10 +21,22 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as
-      | { isbn?: string; ISBN?: string }
+      | (BookCreatePayload & { isbn?: string; ISBN?: string })
       | null
     const isbn = requireIsbn(body?.isbn ?? body?.ISBN)
-    const book = await createBook(isbn)
+    const extras: BookCreatePayload = {
+      Title: body?.Title,
+      Author: body?.Author,
+      Genre: body?.Genre,
+      Status: body?.Status,
+      StartDate: body?.StartDate,
+      EndDate: body?.EndDate,
+      Borrowed: body?.Borrowed,
+      BorrowedBy: body?.BorrowedBy,
+      BorrowedOn: body?.BorrowedOn,
+      BorrowedUntil: body?.BorrowedUntil,
+    }
+    const book = await createBook(isbn, extras)
     return NextResponse.json(book, { status: 201 })
   } catch (error) {
     return jsonError(error)

@@ -38,7 +38,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ApiError, removeBook, updateBook } from "@/lib/api/books"
+import { ApiError } from "@/lib/api/books"
+import {
+  removeLocalBook,
+  updateLocalBook,
+} from "@/lib/offline/books-repository"
 
 const STATUSES: BookStatus[] = ["TBR", "Reading", "Done", "To-Buy"]
 
@@ -52,13 +56,12 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
   const [borrowedUntil, setBorrowedUntil] = useState(book.BorrowedUntil ?? "")
   const [pending, setPending] = useState(false)
 
-  async function patch(label: string, payload: Parameters<typeof updateBook>[1]) {
+  async function patch(label: string, payload: Parameters<typeof updateLocalBook>[1]) {
     if (!isbn) return
     setPending(true)
     try {
-      await updateBook(isbn, payload)
+      await updateLocalBook(isbn, payload)
       toast.success(label)
-      router.refresh()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Update failed.")
     } finally {
@@ -85,10 +88,9 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
     if (!isbn) return
     setPending(true)
     try {
-      await removeBook(isbn)
+      await removeLocalBook(isbn)
       toast.success(`Removed ${book.Title}`)
       setDeleteOpen(false)
-      router.refresh()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Remove failed.")
     } finally {

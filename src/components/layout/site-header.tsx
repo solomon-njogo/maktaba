@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { AddBookSheet } from "@/components/books/add-book-sheet"
+import { SyncStatusBadge } from "@/components/offline/sync-status"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -32,6 +33,7 @@ export function SiteHeader() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <SyncStatusBadge />
             <Link
               href="/design-system"
               className={cn(

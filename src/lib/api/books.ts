@@ -1,4 +1,9 @@
-import type { BookStatus, BookUpdatePayload, FormattedBookResponse } from "@/types/books"
+import type {
+  BookCreatePayload,
+  BookStatus,
+  BookUpdatePayload,
+  FormattedBookResponse,
+} from "@/types/books"
 
 export class ApiError extends Error {
   status: number
@@ -61,10 +66,10 @@ export function getBook(isbn: string) {
   )
 }
 
-export function addBook(isbn: string) {
+export function addBook(isbn: string, extras?: BookCreatePayload) {
   return request<FormattedBookResponse>("/api/books", {
     method: "POST",
-    body: JSON.stringify({ isbn }),
+    body: JSON.stringify({ isbn, ...extras }),
   })
 }
 

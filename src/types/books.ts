@@ -91,3 +91,5 @@ export interface BookUpdatePayload {
   BorrowedOn?: string;
   BorrowedUntil?: string;
 }
+
+export type BookCreatePayload = BookUpdatePayload

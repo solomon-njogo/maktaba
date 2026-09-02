@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -34,7 +34,11 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ApiError, removeBook, updateBook } from "@/lib/api/books"
+import { ApiError } from "@/lib/api/books"
+import {
+  removeLocalBook,
+  updateLocalBook,
+} from "@/lib/offline/books-repository"
 import { cn } from "@/lib/utils"
 
 const STATUSES: BookStatus[] = ["TBR", "Reading", "Done", "To-Buy"]
@@ -98,18 +102,24 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 const selectClassName =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
 
-export function BookDetail({ book }: { book: FormattedBookResponse }) {
+export function BookDetail({
+  book,
+}: {
+  book: FormattedBookResponse & { pending?: boolean }
+}) {
   const router = useRouter()
   const isbn = book.ISBN
   const coverUrl = book.coverUrl ?? book.Thumbnail
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(() => formFromBook(book))
+  const [formBook, setFormBook] = useState(book)
   const [pending, setPending] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  useEffect(() => {
+  if (book !== formBook) {
+    setFormBook(book)
     setForm(formFromBook(book))
-  }, [book])
+  }
 
   function updateField<K extends keyof BookFormState>(
     key: K,
@@ -149,10 +159,9 @@ export function BookDetail({ book }: { book: FormattedBookResponse }) {
 
     setPending(true)
     try {
-      await updateBook(isbn, payload)
+      await updateLocalBook(isbn, payload)
       toast.success("Saved changes")
       setEditing(false)
-      router.refresh()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Update failed.")
     } finally {
@@ -164,10 +173,9 @@ export function BookDetail({ book }: { book: FormattedBookResponse }) {
     if (!isbn) return
     setPending(true)
     try {
-      await removeBook(isbn)
+      await removeLocalBook(isbn)
       toast.success(`Removed ${book.Title}`)
       router.push("/")
-      router.refresh()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Remove failed.")
     } finally {
@@ -404,6 +412,9 @@ export function BookDetail({ book }: { book: FormattedBookResponse }) {
                 <h1 className="text-2xl wrap-break-word sm:text-3xl">{book.Title}</h1>
                 <p className="text-muted-foreground">{book.Author || "Unknown author"}</p>
                 <StatusBadge status={book.Status} borrowed={book.Borrowed} />
+                {book.pending ? (
+                  <p className="text-xs text-muted-foreground">Waiting to sync</p>
+                ) : null}
               </header>
               <dl>
                 <DetailRow label="ISBN" value={isbn || "—"} />
