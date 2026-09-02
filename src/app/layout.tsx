@@ -3,6 +3,7 @@ import { Geist_Mono, Inter } from "next/font/google"
 
 import { LibraryProvider } from "@/components/books/library-provider"
 import { SiteHeader } from "@/components/layout/site-header"
+import { ClientOutlet } from "@/components/offline/client-outlet"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -50,7 +51,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <TooltipProvider>
               <LibraryProvider>
                 <SiteHeader />
-                <div className="flex flex-1 flex-col">{children}</div>
+                <div className="flex flex-1 flex-col">
+                  <ClientOutlet>{children}</ClientOutlet>
+                </div>
                 <Toaster />
               </LibraryProvider>
             </TooltipProvider>

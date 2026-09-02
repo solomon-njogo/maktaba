@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import Link from "next/link"
+import { AppLink } from "@/components/offline/app-link"
 import { SearchIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -84,7 +84,7 @@ export default function DesignSystemPage() {
           semantic utilities over raw color values.
         </p>
         <Button
-          render={<Link href="/" />}
+          render={<AppLink href="/" />}
           nativeButton={false}
           variant="outline"
           size="sm"

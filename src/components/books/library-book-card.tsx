@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { MoreHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import type { BookStatus, FormattedBookResponse } from "@/types/books"
 import { BookCard } from "@/components/books/book-card"
+import { AppLink } from "@/components/offline/app-link"
+import { navigateApp } from "@/lib/offline/navigation"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +47,6 @@ import {
 const STATUSES: BookStatus[] = ["TBR", "Reading", "Done", "To-Buy"]
 
 export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
-  const router = useRouter()
   const isbn = book.ISBN
   const [borrowOpen, setBorrowOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -103,7 +102,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
   return (
     <div className="relative">
       {href ? (
-        <Link
+        <AppLink
           href={href}
           className="block rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
@@ -118,7 +117,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
               coverUrl: book.coverUrl ?? book.Thumbnail,
             }}
           />
-        </Link>
+        </AppLink>
       ) : (
         <BookCard
           className="pr-10"
@@ -145,7 +144,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   disabled={pending}
-                  onClick={() => router.push(`/books/${encodeURIComponent(isbn)}`)}
+                  onClick={() => navigateApp(`/books/${encodeURIComponent(isbn)}`)}
                 >
                   View details
                 </DropdownMenuItem>
