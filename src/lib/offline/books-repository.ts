@@ -82,7 +82,10 @@ async function enqueue(
     createdAt: Date.now(),
   })
   notifyLibrary()
-  void import("./sync").then((mod) => mod.drainOutbox())
+  void import("./sync").then((mod) => {
+    void mod.drainOutbox()
+    void mod.requestBackgroundSync()
+  })
 }
 
 export async function createLocalBook(

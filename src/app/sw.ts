@@ -5,6 +5,12 @@ import { defaultCache } from "@serwist/turbopack/worker"
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist"
 import { CacheFirst, ExpirationPlugin, Serwist } from "serwist"
 
+import {
+  BACKGROUND_SYNC_TAG,
+  hydrateLibrary,
+  PERIODIC_SYNC_TAG,
+} from "../lib/offline/sync"
+
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
     __SW_MANIFEST: (PrecacheEntry | string)[] | undefined
@@ -32,7 +38,7 @@ const serwist = new Serwist({
         cacheName: "maktaba-covers",
         plugins: [
           new ExpirationPlugin({
-            maxEntries: 250,
+            maxEntries: 1000,
             maxAgeSeconds: 60 * 60 * 24 * 30,
           }),
         ],
@@ -43,7 +49,7 @@ const serwist = new Serwist({
   fallbacks: {
     entries: [
       {
-        url: "/~offline",
+        url: "/",
         matcher({ request }) {
           return request.destination === "document"
         },
@@ -53,3 +59,15 @@ const serwist = new Serwist({
 })
 
 serwist.addEventListeners()
+
+self.addEventListener("sync", (event) => {
+  const syncEvent = event as ExtendableEvent & { tag: string }
+  if (syncEvent.tag !== BACKGROUND_SYNC_TAG) return
+  syncEvent.waitUntil(hydrateLibrary())
+})
+
+self.addEventListener("periodicsync", (event) => {
+  const periodicEvent = event as ExtendableEvent & { tag: string }
+  if (periodicEvent.tag !== PERIODIC_SYNC_TAG) return
+  periodicEvent.waitUntil(hydrateLibrary())
+})

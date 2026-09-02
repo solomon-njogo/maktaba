@@ -17,12 +17,24 @@ import {
 } from "./db"
 import { notifyLibrary } from "./events"
 import { replaceRemoteCatalog, upsertRemoteBook } from "./books-repository"
+import { warmCoverCache } from "./covers"
 import type { SyncStatus } from "./types"
 
+export const BACKGROUND_SYNC_TAG = "maktaba-sync"
+export const PERIODIC_SYNC_TAG = "maktaba-periodic"
+
 let draining = false
+let pulling = false
 let started = false
 let lastError: string | undefined
 let syncing = false
+
+type SyncCapableRegistration = ServiceWorkerRegistration & {
+  sync?: { register: (tag: string) => Promise<void> }
+  periodicSync?: {
+    register: (tag: string, options?: { minInterval: number }) => Promise<void>
+  }
+}
 
 function isBrowserOnline() {
   return typeof navigator === "undefined" ? true : navigator.onLine
@@ -43,8 +55,36 @@ export async function readSyncStatus(): Promise<SyncStatus> {
   return getSyncSnapshot(pending.size, await getLastSyncedAt())
 }
 
+export async function requestBackgroundSync() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
+  try {
+    const registration = (await navigator.serviceWorker.ready) as SyncCapableRegistration
+    await registration.sync?.register(BACKGROUND_SYNC_TAG)
+  } catch {
+    // Background Sync is unavailable (Safari) or the browser refused the tag.
+  }
+}
+
+export async function requestPeriodicBackgroundSync() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
+  try {
+    const registration = (await navigator.serviceWorker.ready) as SyncCapableRegistration
+    if (!registration.periodicSync) return
+    const status = await navigator.permissions.query({
+      name: "periodic-background-sync" as PermissionName,
+    })
+    if (status.state !== "granted") return
+    await registration.periodicSync.register(PERIODIC_SYNC_TAG, {
+      minInterval: 15 * 60 * 1000,
+    })
+  } catch {
+    // Periodic Background Sync is Chrome/Edge installed-PWA only.
+  }
+}
+
 export async function pullRemoteCatalog(): Promise<void> {
-  if (!isBrowserOnline()) return
+  if (!isBrowserOnline() || pulling) return
+  pulling = true
   syncing = true
   notifyLibrary()
   try {
@@ -52,9 +92,11 @@ export async function pullRemoteCatalog(): Promise<void> {
     await replaceRemoteCatalog(remote)
     await setLastSyncedAt(Date.now())
     lastError = undefined
+    warmCoverCache(remote)
   } catch (error) {
     lastError = error instanceof Error ? error.message : "Could not sync library."
   } finally {
+    pulling = false
     syncing = false
     notifyLibrary()
   }
@@ -157,17 +199,26 @@ export function startOfflineSync() {
   started = true
 
   const onOnline = () => {
-    void pullRemoteCatalog().then(() => drainOutbox())
+    void hydrateLibrary()
+    void requestBackgroundSync()
   }
 
   window.addEventListener("online", onOnline)
-  window.addEventListener("offline", () => notifyLibrary())
+  window.addEventListener("offline", () => {
+    notifyLibrary()
+    void requestBackgroundSync()
+  })
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") onOnline()
   })
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) onOnline()
+  })
   window.setInterval(() => {
-    if (isBrowserOnline()) void drainOutbox()
+    if (isBrowserOnline()) void hydrateLibrary()
   }, 30_000)
 
+  void requestBackgroundSync()
+  void requestPeriodicBackgroundSync()
   void hydrateLibrary()
 }

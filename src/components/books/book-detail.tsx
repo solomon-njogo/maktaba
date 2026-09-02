@@ -2,8 +2,6 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { ArrowLeftIcon, BookOpenIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -14,6 +12,8 @@ import type {
   FormattedBookResponse,
 } from "@/types/books"
 import { StatusBadge } from "@/components/books/status-badge"
+import { AppLink } from "@/components/offline/app-link"
+import { navigateApp } from "@/lib/offline/navigation"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,7 +107,6 @@ export function BookDetail({
 }: {
   book: FormattedBookResponse & { pending?: boolean }
 }) {
-  const router = useRouter()
   const isbn = book.ISBN
   const coverUrl = book.coverUrl ?? book.Thumbnail
   const [editing, setEditing] = useState(false)
@@ -175,7 +174,7 @@ export function BookDetail({
     try {
       await removeLocalBook(isbn)
       toast.success(`Removed ${book.Title}`)
-      router.push("/")
+      navigateApp("/")
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Remove failed.")
     } finally {
@@ -186,7 +185,7 @@ export function BookDetail({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
+        <AppLink
           href="/"
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
@@ -195,7 +194,7 @@ export function BookDetail({
         >
           <ArrowLeftIcon />
           Library
-        </Link>
+        </AppLink>
         <div className="flex flex-wrap items-center gap-2">
           {editing ? (
             <>
