@@ -22,6 +22,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { ApiError, lookupBook } from "@/lib/api/books"
+import { useMdUp } from "@/hooks/use-md-up"
 import { cleanIsbnString } from "@/lib/isbn"
 import { createLocalBook } from "@/lib/offline/books-repository"
 import type { BookStatus, FormattedBookResponse } from "@/types/books"
@@ -32,6 +33,7 @@ const selectClassName =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
 
 export function AddBookSheet() {
+  const mdUp = useMdUp()
   const { books } = useLibrary()
   const [open, setOpen] = useState(false)
   const [isbn, setIsbn] = useState("")
@@ -172,8 +174,20 @@ export function AddBookSheet() {
         if (!next) reset()
       }}
     >
-      <SheetTrigger render={<Button size="sm" />}>Add book</SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetTrigger
+        render={
+          <Button
+            size="sm"
+            className="min-h-touch px-3 md:min-h-7 md:px-2.5"
+          />
+        }
+      >
+        Add book
+      </SheetTrigger>
+      <SheetContent
+        side={mdUp ? "right" : "bottom"}
+        className="w-full data-[side=bottom]:max-h-[90dvh] data-[side=right]:sm:max-w-md"
+      >
         <SheetHeader>
           <SheetTitle>Add by ISBN</SheetTitle>
           <SheetDescription>

@@ -13,6 +13,7 @@ import type {
 } from "@/types/books"
 import { StatusBadge } from "@/components/books/status-badge"
 import { AppLink } from "@/components/offline/app-link"
+import { PageShell } from "@/components/layout/page-shell"
 import { navigateApp } from "@/lib/offline/navigation"
 import {
   AlertDialog,
@@ -183,7 +184,7 @@ export function BookDetail({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <PageShell>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <AppLink
           href="/"
@@ -461,6 +462,6 @@ export function BookDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   )
 }

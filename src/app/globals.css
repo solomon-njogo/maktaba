@@ -58,10 +58,19 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --max-width-page: 64rem;
+  --spacing-page-x: var(--page-gutter);
+  --spacing-safe-top: env(safe-area-inset-top, 0px);
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --spacing-tab-bar: 4.5rem;
+  --spacing-touch: 2.75rem;
+  --size-touch: 2.75rem;
+  --size-control: 2rem;
 }
 
 /* Light tokens exist so the palette is complete; the app defaults to dark. */
 :root {
+  --page-gutter: 1rem;
   --background: oklch(0.99 0.002 264);
   --foreground: oklch(0.145 0.005 264);
   --card: oklch(1 0 0);
@@ -155,6 +164,18 @@
   --status-to-buy-foreground: oklch(0.9 0.03 55);
   --status-borrowed: oklch(0.28 0.025 310);
   --status-borrowed-foreground: oklch(0.9 0.02 310);
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --page-gutter: 1.5rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --page-gutter: 2rem;
+  }
 }
 
 @layer base {

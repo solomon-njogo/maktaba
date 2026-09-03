@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { BookCard } from "@/components/books/book-card"
 import { BookEmpty } from "@/components/books/book-empty"
 import { StatusBadge } from "@/components/books/status-badge"
+import { PageShell } from "@/components/layout/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -73,7 +74,7 @@ function Swatch({
 
 export default function DesignSystemPage() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-4 py-10 sm:px-6 lg:px-8">
+    <PageShell className="gap-12 py-10">
       <header className="flex flex-col gap-3">
         <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
           Maktaba
@@ -81,7 +82,8 @@ export default function DesignSystemPage() {
         <h1 className="text-3xl sm:text-4xl">Design system</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           Dark-first tokens, shadcn primitives, and library composites. Prefer
-          semantic utilities over raw color values.
+          semantic utilities over raw color values. Layout uses PageShell,
+          max-w-page, and md as the phone/desktop chrome split.
         </p>
         <Button
           render={<AppLink href="/" />}
@@ -95,6 +97,38 @@ export default function DesignSystemPage() {
       </header>
 
       <Separator />
+
+      <Section
+        title="Layout"
+        description="Page width, gutters, chrome, and touch. Use PageShell instead of copying max-width classes."
+      >
+        <div className="flex flex-col gap-4 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10 sm:p-6">
+          <p>
+            Content lives in <span className="font-mono">max-w-page</span>{" "}
+            (64rem) with <span className="font-mono">px-page-x</span> gutters
+            (1rem → 2rem). Phone lists add bottom space for the tab bar and
+            safe-area insets.
+          </p>
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-muted-foreground">
+            <li>
+              Below <span className="font-mono text-foreground">md</span>{" "}
+              (768px): compact header, bottom tabs (Library, TBR, Reading,
+              Done, More). Overlays use a bottom sheet.
+            </li>
+            <li>
+              From <span className="font-mono text-foreground">md</span>: full
+              top nav, side sheet for add-book, compact{" "}
+              <span className="font-mono text-foreground">h-control</span>{" "}
+              controls.
+            </li>
+            <li>
+              Phone chrome uses{" "}
+              <span className="font-mono text-foreground">size-touch</span>{" "}
+              (44px). Do not enlarge every primitive globally.
+            </li>
+          </ul>
+        </div>
+      </Section>
 
       <Section title="Color" description="Canvas, elevated surfaces, and status chips.">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
@@ -262,6 +296,6 @@ export default function DesignSystemPage() {
           </div>
         </div>
       </Section>
-    </div>
+    </PageShell>
   )
 }

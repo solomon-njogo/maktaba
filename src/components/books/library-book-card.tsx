@@ -107,7 +107,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
           className="block rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <BookCard
-            className="pr-10 transition-colors hover:bg-muted/40"
+            className="pr-12 transition-colors hover:bg-muted/40 md:pr-10"
             book={{
               Title: book.Title,
               Author: book.Author,
@@ -120,7 +120,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
         </AppLink>
       ) : (
         <BookCard
-          className="pr-10"
+          className="pr-12 md:pr-10"
           book={{
             Title: book.Title,
             Author: book.Author,
@@ -135,7 +135,7 @@ export function LibraryBookCard({ book }: { book: FormattedBookResponse }) {
         <div className="absolute top-3 right-3">
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-sm" disabled={pending} />}
+              render={<Button variant="ghost" size="icon-sm" disabled={pending} className="min-h-touch min-w-touch md:min-h-7 md:min-w-7" />}
             >
               <MoreHorizontalIcon />
               <span className="sr-only">Actions for {book.Title}</span>

@@ -3,6 +3,7 @@ import { Geist_Mono, Inter } from "next/font/google"
 
 import { LibraryProvider } from "@/components/books/library-provider"
 import { SiteHeader } from "@/components/layout/site-header"
+import { SiteTabBar } from "@/components/layout/site-tab-bar"
 import { ClientOutlet } from "@/components/offline/client-outlet"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -19,6 +20,8 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 })
+
+export { viewport } from "./viewport"
 
 export const metadata: Metadata = {
   title: "Maktaba",
@@ -54,7 +57,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <div className="flex flex-1 flex-col">
                   <ClientOutlet>{children}</ClientOutlet>
                 </div>
-                <Toaster />
+                <SiteTabBar />
+                <Toaster
+                  offset={{ bottom: 16 }}
+                  mobileOffset={{
+                    bottom:
+                      "calc(var(--spacing-tab-bar) + var(--spacing-safe-bottom) + 8px)",
+                  }}
+                />
               </LibraryProvider>
             </TooltipProvider>
           </ThemeProvider>
