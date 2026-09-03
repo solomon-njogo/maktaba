@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/serwist/:path*",
+        headers: [
+          { key: "Service-Worker-Allowed", value: "/" },
+          { key: "Cache-Control", value: "no-cache" },
+        ],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
