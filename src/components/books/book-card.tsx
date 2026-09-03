@@ -34,7 +34,7 @@ function Cover({ coverUrl }: { coverUrl?: string }) {
         src={coverUrl}
         alt=""
         fill
-        sizes="112px"
+        sizes="(max-width: 640px) 80px, 96px"
         className="object-cover"
         unoptimized
       />
@@ -52,8 +52,8 @@ function BookCardSkeleton({ className }: { className?: string }) {
   return (
     <Card className={cn("w-full", className)} size="sm">
       <CardContent>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <Skeleton className="aspect-[2/3] w-full max-w-28 shrink-0 rounded-lg sm:w-24" />
+        <div className="flex flex-row items-start gap-3 sm:gap-4">
+          <Skeleton className="aspect-[2/3] w-20 shrink-0 rounded-lg sm:w-24" />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Skeleton className="h-5 w-3/4" />
             <Skeleton className="h-4 w-1/2" />
@@ -80,8 +80,8 @@ export function BookCard({ book, loading = false, className }: BookCardProps) {
   return (
     <Card className={cn("w-full", className)} size="sm">
       <CardContent>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="relative aspect-[2/3] w-full max-w-28 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 sm:w-24">
+        <div className="flex flex-row items-start gap-3 sm:gap-4">
+          <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 sm:w-24">
             <Cover coverUrl={book.coverUrl} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2">

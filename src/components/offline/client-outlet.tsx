@@ -6,6 +6,7 @@ import { BookDetail } from "@/components/books/book-detail"
 import { BookNotFound } from "@/components/books/book-not-found"
 import { LibraryView } from "@/components/books/library-view"
 import { useBook } from "@/components/books/library-provider"
+import { PageShell } from "@/components/layout/page-shell"
 import { AppLink } from "@/components/offline/app-link"
 import { useAppPath } from "@/components/offline/app-path"
 import { buttonVariants } from "@/components/ui/button"
@@ -29,10 +30,10 @@ function BookRoute({ isbn }: { isbn: string }) {
 
   if (!ready) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-8 text-sm text-muted-foreground sm:px-6 lg:px-8">
+      <PageShell className="flex-row items-center gap-2 py-8 text-sm text-muted-foreground">
         <Spinner />
         Opening book…
-      </div>
+      </PageShell>
     )
   }
 
@@ -52,7 +53,7 @@ function RouteView({ path }: { path: string }) {
 
   if (!LIST_PATHS.has(path)) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-16 sm:px-6 lg:px-8">
+      <PageShell className="gap-4 py-16">
         <h1 className="text-2xl">Page not found</h1>
         <p className="text-sm text-muted-foreground sm:text-base">
           That screen is not part of the library.
@@ -60,7 +61,7 @@ function RouteView({ path }: { path: string }) {
         <AppLink href="/" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>
           Back to library
         </AppLink>
-      </div>
+      </PageShell>
     )
   }
 
@@ -133,10 +134,10 @@ export function ClientOutlet({ children }: { children: ReactNode }) {
 
   if (path === null) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-8 text-sm text-muted-foreground sm:px-6 lg:px-8">
+      <PageShell className="flex-row items-center gap-2 py-8 text-sm text-muted-foreground">
         <Spinner />
         Loading library…
-      </div>
+      </PageShell>
     )
   }
 
