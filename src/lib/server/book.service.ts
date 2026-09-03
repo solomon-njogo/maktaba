@@ -1,5 +1,3 @@
-import type { FieldSet, Record as AirtableRecord } from "airtable"
-
 import type {
   BookCreatePayload,
   BookStatus,
@@ -12,7 +10,11 @@ import type {
 } from "@/types/books"
 import { cleanIsbnString } from "@/lib/isbn"
 
-import { getAirtableBase } from "./airtable"
+import {
+  AirtableRecord,
+  getAirtableBase,
+  type FieldSet,
+} from "./airtable"
 import { HttpError } from "./http-error"
 
 export { cleanIsbnString }
@@ -136,7 +138,7 @@ function isDeleted(deletedAt: unknown): boolean {
 }
 
 function firstNamedField(
-  record: AirtableRecord<FieldSet>,
+  record: AirtableRecord,
   names: readonly string[]
 ): string | undefined {
   for (const name of names) {
@@ -155,7 +157,7 @@ function toAirtableDate(value: string | undefined): string | null {
 }
 
 function firstDateField(
-  record: AirtableRecord<FieldSet>,
+  record: AirtableRecord,
   names: readonly string[]
 ): string | undefined {
   for (const name of names) {
@@ -205,7 +207,7 @@ function clearBorrowedPerson(fields: FieldSet) {
 }
 
 function formatRecord(
-  record: AirtableRecord<FieldSet>,
+  record: AirtableRecord,
   inLibrary: boolean
 ): FormattedBookResponse {
   const isbn =
@@ -248,7 +250,7 @@ async function findRecordsByIsbn(isbn: string) {
 
 async function findActiveRecordByIsbn(
   isbn: string
-): Promise<AirtableRecord<FieldSet> | null> {
+): Promise<AirtableRecord | null> {
   const records = await findRecordsByIsbn(isbn)
   return (
     records.find((record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS))) ??

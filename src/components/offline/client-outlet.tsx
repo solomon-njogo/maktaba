@@ -131,6 +131,7 @@ function RouteView({ path }: { path: string }) {
       title="Library"
       description="Every title currently on the shelves."
       emptyVariant="library"
+      showTotal
     />
   )
 }
