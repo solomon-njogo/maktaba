@@ -1,4 +1,10 @@
-import { BookOpenIcon, BookmarkIcon, ShoppingBagIcon, UsersIcon } from "lucide-react"
+import {
+  BookOpenIcon,
+  BookmarkIcon,
+  SearchIcon,
+  ShoppingBagIcon,
+  UsersIcon,
+} from "lucide-react"
 
 import {
   Empty,
@@ -15,6 +21,7 @@ export type BookEmptyVariant =
   | "done"
   | "to-buy"
   | "borrowed"
+  | "search"
 
 const COPY: Record<
   BookEmptyVariant,
@@ -49,6 +56,11 @@ const COPY: Record<
     title: "Nothing is out on loan",
     description: "When a book leaves the house, tag it as borrowed here.",
     icon: UsersIcon,
+  },
+  search: {
+    title: "No matching titles",
+    description: "Try a different title, author, ISBN, or genre.",
+    icon: SearchIcon,
   },
 }
 
