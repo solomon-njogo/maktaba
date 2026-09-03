@@ -174,7 +174,7 @@ function setAliased(
   names: readonly string[],
   value: string | null
 ) {
-  fields[names[0]] = value as FieldSet[string]
+  ;(fields as Record<string, unknown>)[names[0]] = value
 }
 
 function setAliasedIfFilled(
@@ -662,7 +662,7 @@ async function applyRecordFields(fields: FieldSet, existingId?: string) {
       const emptyDateField = emptyDateAirtableField(error)
       if (emptyDateField && emptyDateField in pending) {
         if (pending[emptyDateField] === "") {
-          pending[emptyDateField] = null as FieldSet[string]
+          ;(pending as Record<string, unknown>)[emptyDateField] = null
           continue
         }
         delete pending[emptyDateField]
