@@ -9,6 +9,7 @@ import { useBook } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
 import { AppLink } from "@/components/offline/app-link"
 import { useAppPath } from "@/components/offline/app-path"
+import { PendingQueueView } from "@/components/offline/pending-queue"
 import { buttonVariants } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { cleanIsbnString } from "@/lib/isbn"
@@ -22,6 +23,7 @@ const LIST_PATHS = new Set([
   "/done",
   "/to-buy",
   "/borrowed",
+  "/pending",
   "/~offline",
 ])
 
@@ -118,6 +120,10 @@ function RouteView({ path }: { path: string }) {
         emptyVariant="borrowed"
       />
     )
+  }
+
+  if (path === "/pending") {
+    return <PendingQueueView />
   }
 
   return (

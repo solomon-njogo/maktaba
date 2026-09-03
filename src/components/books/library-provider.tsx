@@ -11,15 +11,16 @@ import {
 } from "react"
 
 import { getBook } from "@/lib/api/books"
-import { getAllBooks } from "@/lib/offline/db"
+import { getAllBooks, getOutbox } from "@/lib/offline/db"
 import { subscribeLibrary } from "@/lib/offline/events"
 import { filterBooks } from "@/lib/offline/books-repository"
 import { readSyncStatus, startOfflineSync } from "@/lib/offline/sync"
-import type { LocalBook, SyncStatus } from "@/lib/offline/types"
+import type { LocalBook, OutboxOp, SyncStatus } from "@/lib/offline/types"
 import type { ListBooksFilters } from "@/lib/api/books"
 
 type LibraryContextValue = {
   books: LocalBook[]
+  outbox: OutboxOp[]
   ready: boolean
   status: SyncStatus
   booksFor: (filters?: ListBooksFilters) => LocalBook[]
@@ -36,13 +37,19 @@ const idleStatus: SyncStatus = {
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const [books, setBooks] = useState<LocalBook[]>([])
+  const [outbox, setOutbox] = useState<OutboxOp[]>([])
   const [ready, setReady] = useState(false)
   const [status, setStatus] = useState<SyncStatus>(idleStatus)
 
   const refresh = useCallback(async () => {
     try {
-      const [all, nextStatus] = await Promise.all([getAllBooks(), readSyncStatus()])
+      const [all, ops, nextStatus] = await Promise.all([
+        getAllBooks(),
+        getOutbox(),
+        readSyncStatus(),
+      ])
       setBooks(all)
+      setOutbox(ops)
       setStatus(nextStatus)
     } catch {
       setStatus((current) => ({
@@ -71,13 +78,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LibraryContextValue>(
     () => ({
       books,
+      outbox,
       ready,
       status,
       booksFor: (filters) => filterBooks(books, filters),
       bookByIsbn: (isbn) =>
         books.find((book) => book.ISBN === isbn && !book.deleted),
     }),
-    [books, ready, status]
+    [books, outbox, ready, status]
   )
 
   return (
@@ -103,6 +111,21 @@ export function useLibraryStatus() {
     throw new Error("useLibraryStatus must be used within LibraryProvider")
   }
   return context.status
+}
+
+export function usePendingQueue() {
+  const context = useContext(LibraryContext)
+  if (!context) {
+    throw new Error("usePendingQueue must be used within LibraryProvider")
+  }
+
+  return {
+    ops: context.outbox,
+    ready: context.ready,
+    status: context.status,
+    bookFor: (isbn: string) =>
+      context.books.find((book) => book.ISBN === isbn),
+  }
 }
 
 export function useBook(isbn: string | undefined) {

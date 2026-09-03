@@ -15,6 +15,7 @@ export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } =
       { url: "/done", revision },
       { url: "/to-buy", revision },
       { url: "/borrowed", revision },
+      { url: "/pending", revision },
       { url: "/design-system", revision },
     ],
     swSrc: "app/sw.ts",
