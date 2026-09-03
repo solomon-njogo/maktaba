@@ -82,6 +82,40 @@ export async function removeOutboxOp(id: string): Promise<void> {
   await db.delete("outbox", id)
 }
 
+export async function clearOutbox(): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction("outbox", "readwrite")
+  await tx.store.clear()
+  await tx.done
+}
+
+export async function replaceOutboxOrder(ids: string[]): Promise<void> {
+  const current = await getOutbox()
+  const byId = new Map(current.map((op) => [op.id, op]))
+  const next: OutboxOp[] = []
+
+  for (const id of ids) {
+    const op = byId.get(id)
+    if (!op) continue
+    next.push(op)
+    byId.delete(id)
+  }
+  next.push(...byId.values())
+
+  const db = await getDb()
+  const tx = db.transaction("outbox", "readwrite")
+  const start = Math.max(1, Date.now() - next.length)
+  for (let i = 0; i < next.length; i++) {
+    const op = next[i]
+    await tx.store.put({
+      ...op,
+      queuedAt: op.queuedAt ?? op.createdAt,
+      createdAt: start + i,
+    })
+  }
+  await tx.done
+}
+
 export async function isbnHasOtherOps(isbn: string, exceptId: string): Promise<boolean> {
   const ops = await getOutbox()
   return ops.some((op) => op.isbn === isbn && op.id !== exceptId)

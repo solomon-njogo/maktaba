@@ -15,6 +15,7 @@ export type OutboxOp = {
   isbn: string
   payload?: BookCreatePayload
   createdAt: number
+  queuedAt?: number
 }
 
 export type SyncStatus = {
