@@ -4,11 +4,15 @@ import { cleanIsbnString } from "@/lib/isbn"
 
 import {
   addOutboxOp,
+  clearOutbox,
   deleteBookRecord,
   getAllBooks,
   getBookByIsbn,
+  getOutbox,
   pendingIsbnSet,
   putBook,
+  removeOutboxOp,
+  replaceOutboxOrder,
 } from "./db"
 import { notifyLibrary } from "./events"
 import type { BookCreatePayload, LocalBook } from "./types"
@@ -74,12 +78,14 @@ async function enqueue(
   isbn: string,
   payload?: BookCreatePayload
 ) {
+  const now = Date.now()
   await addOutboxOp({
     id: crypto.randomUUID(),
     type,
     isbn,
     payload,
-    createdAt: Date.now(),
+    createdAt: now,
+    queuedAt: now,
   })
   notifyLibrary()
   void import("./sync").then((mod) => {
@@ -230,5 +236,85 @@ export async function upsertRemoteBook(
     deleted: false,
     inLibrary: true,
   })
+  notifyLibrary()
+}
+
+async function refreshRemote() {
+  void import("./sync").then((mod) => {
+    void mod.pullRemoteCatalog()
+  })
+}
+
+async function reconcileIsbn(isbn: string) {
+  const remaining = (await getOutbox()).filter((op) => op.isbn === isbn)
+  const book = await getBookByIsbn(isbn)
+
+  if (remaining.length > 0) {
+    if (!book?.id && !remaining.some((op) => op.type === "create")) {
+      for (const op of remaining) {
+        await removeOutboxOp(op.id)
+      }
+      if (book) await deleteBookRecord(isbn)
+      return
+    }
+
+    if (book) {
+      const willDelete = remaining.some((op) => op.type === "delete")
+      await putBook({
+        ...book,
+        pending: true,
+        deleted: willDelete,
+        inLibrary: !willDelete,
+      })
+    }
+    return
+  }
+
+  if (!book) return
+
+  if (!book.id) {
+    await deleteBookRecord(isbn)
+    return
+  }
+
+  await putBook({
+    ...book,
+    pending: false,
+    deleted: false,
+    inLibrary: true,
+  })
+}
+
+export async function dropQueuedOp(id: string) {
+  const ops = await getOutbox()
+  const op = ops.find((item) => item.id === id)
+  if (!op) return
+  await removeOutboxOp(id)
+  await reconcileIsbn(op.isbn)
+  notifyLibrary()
+  refreshRemote()
+}
+
+export async function clearQueuedOps() {
+  const ops = await getOutbox()
+  if (ops.length === 0) return
+  const isbns = [...new Set(ops.map((op) => op.isbn))]
+  await clearOutbox()
+  for (const isbn of isbns) {
+    await reconcileIsbn(isbn)
+  }
+  notifyLibrary()
+  refreshRemote()
+}
+
+export async function moveQueuedOp(id: string, direction: -1 | 1) {
+  const ops = await getOutbox()
+  const index = ops.findIndex((op) => op.id === id)
+  const next = index + direction
+  if (index < 0 || next < 0 || next >= ops.length) return
+  const ids = ops.map((op) => op.id)
+  const [moved] = ids.splice(index, 1)
+  ids.splice(next, 0, moved)
+  await replaceOutboxOrder(ids)
   notifyLibrary()
 }
