@@ -19,7 +19,28 @@ export { cleanIsbnString }
 
 const TABLE_NAME = "Books"
 const VALID_STATUSES: BookStatus[] = ["Reading", "Done", "TBR", "To-Buy"]
-const DATE_ADDED_FIELD = "Date Added"
+const DATE_ADDED_FIELDS = ["Date Added", "DateAdded"] as const
+const START_DATE_FIELDS = ["Start Date", "StartDate"] as const
+const END_DATE_FIELDS = ["End Date", "EndDate"] as const
+const BORROWED_BY_FIELDS = ["Borrowed By", "BorrowedBy"] as const
+const BORROWED_ON_FIELDS = ["BorrowedOn", "Borrowed On"] as const
+const BORROWED_UNTIL_FIELDS = ["BorrowedUntil", "Borrowed Until"] as const
+const DELETED_AT_FIELDS = ["DeletedAt", "Deleted At"] as const
+
+const FIELD_ALIASES: Record<string, string> = Object.fromEntries(
+  [
+    DATE_ADDED_FIELDS,
+    START_DATE_FIELDS,
+    END_DATE_FIELDS,
+    BORROWED_BY_FIELDS,
+    BORROWED_ON_FIELDS,
+    BORROWED_UNTIL_FIELDS,
+    DELETED_AT_FIELDS,
+  ].flatMap(([preferred, fallback]) => [
+    [preferred, fallback],
+    [fallback, preferred],
+  ])
+)
 
 type AttachmentLike = { url?: string }
 
@@ -114,6 +135,75 @@ function isDeleted(deletedAt: unknown): boolean {
   return Boolean(asOptionalString(deletedAt))
 }
 
+function firstNamedField(
+  record: AirtableRecord<FieldSet>,
+  names: readonly string[]
+): string | undefined {
+  for (const name of names) {
+    const value = asOptionalString(record.get(name))
+    if (value) return value
+  }
+  return undefined
+}
+
+function toAirtableDate(value: string | undefined): string | null {
+  if (value == null) return null
+  const iso = value.trim().slice(0, 10)
+  if (!iso) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  return iso
+}
+
+function firstDateField(
+  record: AirtableRecord<FieldSet>,
+  names: readonly string[]
+): string | undefined {
+  for (const name of names) {
+    const value = record.get(name)
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10)
+    }
+    const date = toAirtableDate(asOptionalString(value))
+    if (date) return date
+  }
+  return undefined
+}
+
+function setAliased(
+  fields: FieldSet,
+  names: readonly string[],
+  value: string | null
+) {
+  fields[names[0]] = value as FieldSet[string]
+}
+
+function setAliasedIfFilled(
+  fields: FieldSet,
+  names: readonly string[],
+  value: string | undefined
+) {
+  if (value === undefined) return
+  const trimmed = value.trim()
+  if (!trimmed) return
+  setAliased(fields, names, trimmed)
+}
+
+function setDateAliased(
+  fields: FieldSet,
+  names: readonly string[],
+  value: string | undefined
+) {
+  const date = toAirtableDate(value)
+  if (!date) return
+  setAliased(fields, names, date)
+}
+
+function clearBorrowedPerson(fields: FieldSet) {
+  setAliased(fields, BORROWED_BY_FIELDS, null)
+  setAliased(fields, BORROWED_ON_FIELDS, null)
+  setAliased(fields, BORROWED_UNTIL_FIELDS, null)
+}
+
 function formatRecord(
   record: AirtableRecord<FieldSet>,
   inLibrary: boolean
@@ -131,19 +221,14 @@ function formatRecord(
     Author: asOptionalString(record.get("Author")) ?? "",
     ISBN: isbn,
     Status: VALID_STATUSES.includes(status) ? status : "TBR",
-    StartDate:
-      asOptionalString(record.get("StartDate")) ??
-      asOptionalString(record.get("Start Date")),
-    EndDate:
-      asOptionalString(record.get("EndDate")) ??
-      asOptionalString(record.get("End Date")),
+    StartDate: firstDateField(record, START_DATE_FIELDS),
+    EndDate: firstDateField(record, END_DATE_FIELDS),
     Borrowed: (asOptionalString(record.get("Borrowed")) as BorrowedFlag) || "No",
-    BorrowedBy: asOptionalString(record.get("BorrowedBy")),
-    BorrowedOn: asOptionalString(record.get("BorrowedOn")),
-    BorrowedUntil: asOptionalString(record.get("BorrowedUntil")),
+    BorrowedBy: firstNamedField(record, BORROWED_BY_FIELDS),
+    BorrowedOn: firstDateField(record, BORROWED_ON_FIELDS),
+    BorrowedUntil: firstDateField(record, BORROWED_UNTIL_FIELDS),
     DateAdded:
-      asOptionalString(record.get(DATE_ADDED_FIELD)) ??
-      asOptionalString(record.get("DateAdded")) ??
+      firstDateField(record, DATE_ADDED_FIELDS) ??
       asOptionalString(record._rawJson?.createdTime)?.slice(0, 10),
     Genre: asOptionalString(record.get("Genre")),
     Thumbnail: thumbnail,
@@ -165,7 +250,10 @@ async function findActiveRecordByIsbn(
   isbn: string
 ): Promise<AirtableRecord<FieldSet> | null> {
   const records = await findRecordsByIsbn(isbn)
-  return records.find((record) => !isDeleted(record.get("DeletedAt"))) ?? null
+  return (
+    records.find((record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS))) ??
+    null
+  )
 }
 
 export async function listBooks(filters?: {
@@ -200,7 +288,7 @@ export async function listBooks(filters?: {
   const records = await query.all()
 
   return records
-    .filter((record) => !isDeleted(record.get("DeletedAt")))
+    .filter((record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS)))
     .map((record) => formatRecord(record, true))
     .sort((a, b) => (b.DateAdded ?? "").localeCompare(a.DateAdded ?? ""))
 }
@@ -411,24 +499,11 @@ function fieldsFromManual(isbn: string, extras: BookCreatePayload): FieldSet {
   }
 
   if (extras.Genre !== undefined) fields.Genre = extras.Genre.trim()
-  if (extras.StartDate) {
-    fields["Start Date"] = extras.StartDate
-    fields.StartDate = extras.StartDate
-  }
-  if (extras.EndDate) {
-    fields["End Date"] = extras.EndDate
-    fields.EndDate = extras.EndDate
-  }
-  if (extras.BorrowedBy !== undefined) fields.BorrowedBy = extras.BorrowedBy
-  if (extras.BorrowedOn !== undefined) fields.BorrowedOn = extras.BorrowedOn
-  if (extras.BorrowedUntil !== undefined) {
-    fields.BorrowedUntil = extras.BorrowedUntil
-  }
-  if (fields.Borrowed === "No") {
-    fields.BorrowedBy = ""
-    fields.BorrowedOn = ""
-    fields.BorrowedUntil = ""
-  }
+  setDateAliased(fields, START_DATE_FIELDS, extras.StartDate)
+  setDateAliased(fields, END_DATE_FIELDS, extras.EndDate)
+  setAliasedIfFilled(fields, BORROWED_BY_FIELDS, extras.BorrowedBy)
+  setDateAliased(fields, BORROWED_ON_FIELDS, extras.BorrowedOn)
+  setDateAliased(fields, BORROWED_UNTIL_FIELDS, extras.BorrowedUntil)
 
   return fields
 }
@@ -445,7 +520,9 @@ export async function createBook(
   const manual = Boolean(extras?.Title?.trim())
 
   const records = await findRecordsByIsbn(cleanIsbn)
-  const active = records.find((record) => !isDeleted(record.get("DeletedAt")))
+  const active = records.find(
+    (record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS))
+  )
   if (active) {
     throw new HttpError(
       409,
@@ -453,38 +530,29 @@ export async function createBook(
     )
   }
 
-  const deleted = records.find((record) => isDeleted(record.get("DeletedAt")))
+  const deleted = records.find((record) =>
+    isDeleted(firstNamedField(record, DELETED_AT_FIELDS))
+  )
   if (deleted) {
-    const restoredFields = (
-      manual
-        ? { DeletedAt: "", ...fieldsFromManual(cleanIsbn, extras ?? {}) }
-        : {
-            DeletedAt: "",
-            Status: "TBR",
-            Borrowed: "No",
-            BorrowedBy: "",
-            BorrowedOn: "",
-            BorrowedUntil: "",
-          }
-    ) as Partial<FieldSet>
-    const restored = await getAirtableBase()(TABLE_NAME).update(
-      deleted.id,
-      restoredFields
-    )
+    const restoredFields: FieldSet = manual
+      ? { ...fieldsFromManual(cleanIsbn, extras ?? {}) }
+      : {
+          Status: "TBR",
+          Borrowed: "No",
+        }
+    setAliased(restoredFields, DELETED_AT_FIELDS, null)
+    if (!manual) clearBorrowedPerson(restoredFields)
+    const restored = await applyRecordFields(restoredFields, deleted.id)
     return formatRecord(restored, true)
   }
 
   if (manual) {
-    const created = await getAirtableBase()(TABLE_NAME).create(
-      fieldsFromManual(cleanIsbn, extras ?? {})
-    )
+    const created = await applyRecordFields(fieldsFromManual(cleanIsbn, extras ?? {}))
     return formatRecord(created, true)
   }
 
   const preview = await lookupIsbn(cleanIsbn)
-  const created = await getAirtableBase()(TABLE_NAME).create(
-    fieldsFromPreview(preview, cleanIsbn)
-  )
+  const created = await applyRecordFields(fieldsFromPreview(preview, cleanIsbn))
   return formatRecord(created, true)
 }
 
@@ -526,15 +594,8 @@ export async function updateBook(
     fields.Status = patch.Status
   }
 
-  if (patch.StartDate) {
-    fields["Start Date"] = patch.StartDate
-    fields.StartDate = patch.StartDate
-  }
-
-  if (patch.EndDate) {
-    fields["End Date"] = patch.EndDate
-    fields.EndDate = patch.EndDate
-  }
+  setDateAliased(fields, START_DATE_FIELDS, patch.StartDate)
+  setDateAliased(fields, END_DATE_FIELDS, patch.EndDate)
 
   if (patch.Borrowed !== undefined) {
     if (patch.Borrowed !== "Yes" && patch.Borrowed !== "No") {
@@ -542,43 +603,78 @@ export async function updateBook(
     }
     fields.Borrowed = patch.Borrowed
     if (patch.Borrowed === "No") {
-      fields.BorrowedBy = ""
-      fields.BorrowedOn = ""
-      fields.BorrowedUntil = ""
+      clearBorrowedPerson(fields)
     }
   }
 
-  if (patch.BorrowedBy !== undefined) fields.BorrowedBy = patch.BorrowedBy
-  if (patch.BorrowedOn !== undefined) fields.BorrowedOn = patch.BorrowedOn
-  if (patch.BorrowedUntil !== undefined) {
-    fields.BorrowedUntil = patch.BorrowedUntil
-  }
+  setAliasedIfFilled(fields, BORROWED_BY_FIELDS, patch.BorrowedBy)
+  setDateAliased(fields, BORROWED_ON_FIELDS, patch.BorrowedOn)
+  setDateAliased(fields, BORROWED_UNTIL_FIELDS, patch.BorrowedUntil)
 
   if (Object.keys(fields).length === 0) {
     throw new HttpError(400, "No valid fields to update.")
   }
 
-  const updated = await updateRecordFields(existing.id, fields)
+  const updated = await applyRecordFields(fields, existing.id)
   return formatRecord(updated, true)
 }
 
-function unknownAirtableField(error: unknown): string | null {
-  if (!error || typeof error !== "object" || !("message" in error)) {
-    return null
+function airtableErrorTexts(error: unknown): string[] {
+  const texts: string[] = []
+  if (error instanceof Error) texts.push(error.message)
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>
+    if (typeof record.message === "string") texts.push(record.message)
+    if (record.error && typeof record.error === "object") {
+      const inner = record.error as Record<string, unknown>
+      if (typeof inner.message === "string") texts.push(inner.message)
+    }
   }
-  const match = String(error.message).match(/Unknown field name: "([^"]+)"/)
-  return match?.[1] ?? null
+  return texts
 }
 
-async function updateRecordFields(id: string, fields: FieldSet) {
+function unknownAirtableField(error: unknown): string | null {
+  for (const text of airtableErrorTexts(error)) {
+    const match = text.match(/Unknown field name: "([^"]+)"/)
+    if (match?.[1]) return match[1]
+  }
+  return null
+}
+
+function emptyDateAirtableField(error: unknown): string | null {
+  for (const text of airtableErrorTexts(error)) {
+    const match = text.match(/Cannot parse date value "" for field (.+)$/)
+    if (match?.[1]) return match[1].trim()
+  }
+  return null
+}
+
+async function applyRecordFields(fields: FieldSet, existingId?: string) {
   const pending: FieldSet = { ...fields }
+  const table = getAirtableBase()(TABLE_NAME)
 
   while (Object.keys(pending).length > 0) {
     try {
-      return await getAirtableBase()(TABLE_NAME).update(id, pending)
+      return existingId
+        ? await table.update(existingId, pending)
+        : await table.create(pending)
     } catch (error) {
+      const emptyDateField = emptyDateAirtableField(error)
+      if (emptyDateField && emptyDateField in pending) {
+        if (pending[emptyDateField] === "") {
+          pending[emptyDateField] = null as FieldSet[string]
+          continue
+        }
+        delete pending[emptyDateField]
+        continue
+      }
+
       const name = unknownAirtableField(error)
       if (name && name in pending) {
+        const alias = FIELD_ALIASES[name]
+        if (alias && !(alias in pending)) {
+          pending[alias] = pending[name]
+        }
         delete pending[name]
         continue
       }
@@ -586,7 +682,10 @@ async function updateRecordFields(id: string, fields: FieldSet) {
     }
   }
 
-  throw new HttpError(400, "No valid fields to update.")
+  throw new HttpError(
+    400,
+    existingId ? "No valid fields to update." : "No valid fields to create."
+  )
 }
 
 export async function softDeleteBook(
@@ -601,9 +700,9 @@ export async function softDeleteBook(
     )
   }
 
-  const updated = await getAirtableBase()(TABLE_NAME).update(existing.id, {
-    DeletedAt: new Date().toISOString(),
-  })
+  const fields: FieldSet = {}
+  setAliased(fields, DELETED_AT_FIELDS, new Date().toISOString())
+  const updated = await applyRecordFields(fields, existing.id)
   return formatRecord(updated, false)
 }
 
