@@ -65,3 +65,22 @@ export function debouncedIsbn10Candidate(raw: string): string | undefined {
   if (!last || last.length !== 10 || !isLookupReadyIsbn(last)) return undefined
   return last
 }
+
+/** Pull an ISBN from a barcode payload (EAN-13 Bookland, optional add-on). */
+export function isbnFromBarcode(text: string): string | null {
+  const digits = text.replace(/[^0-9Xx]/g, "").toUpperCase()
+  if (digits.length >= 13) {
+    const isbn13 = digits.slice(0, 13)
+    if (isLookupReadyIsbn(isbn13)) return isbn13
+  }
+  if (digits.length === 10 && isLookupReadyIsbn(digits)) return digits
+  return null
+}
+
+export function appendIsbnToInput(raw: string, isbn: string): string {
+  const existing = parseIsbnList(raw)
+  if (existing.includes(isbn)) return raw
+  const trimmed = raw.trim()
+  if (!trimmed) return isbn
+  return `${trimmed}\n${isbn}`
+}

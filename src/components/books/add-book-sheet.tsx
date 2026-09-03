@@ -4,7 +4,13 @@ import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import { ScanBarcode } from "lucide-react"
+
 import { BookCard } from "@/components/books/book-card"
+import {
+  IsbnBarcodeScanner,
+  useCameraAvailable,
+} from "@/components/books/isbn-barcode-scanner"
 import { useLibrary } from "@/components/books/library-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ApiError, lookupBook } from "@/lib/api/books"
 import { useMdUp } from "@/hooks/use-md-up"
 import {
+  appendIsbnToInput,
   debouncedIsbn10Candidate,
   immediateLookupIsbns,
   isLookupReadyIsbn,
@@ -65,6 +72,8 @@ export function AddBookSheet() {
   const [status, setStatus] = useState<BookStatus>("TBR")
   const [saving, setSaving] = useState(false)
   const [addingIsbn, setAddingIsbn] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const canScan = useCameraAvailable()
 
   const booksRef = useRef(books)
   booksRef.current = books
@@ -106,6 +115,7 @@ export function AddBookSheet() {
     setStatus("TBR")
     setSaving(false)
     setAddingIsbn(null)
+    setScanning(false)
   }
 
   function acquireSlot() {
@@ -424,24 +434,66 @@ export function AddBookSheet() {
         <SheetHeader>
           <SheetTitle>Add by ISBN</SheetTitle>
           <SheetDescription>
-            Paste one ISBN or many (comma or newline). Titles look up
-            automatically when online.
+            Scan one or more barcodes, or paste ISBNs (comma or newline).
+            Titles look up automatically when online.
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="isbn">ISBN</FieldLabel>
-              <Textarea
-                id="isbn"
-                name="isbn"
-                value={raw}
-                onChange={(event) => setRaw(event.target.value)}
-                placeholder={"9780143127741\n9780143127742"}
-                autoComplete="off"
-                rows={3}
-              />
-              {lookingUp && !isBulk ? (
+              <div className="flex items-center justify-between gap-2">
+                <FieldLabel htmlFor="isbn">ISBN</FieldLabel>
+                {canScan && !scanning ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setScanning(true)}
+                  >
+                    <ScanBarcode data-icon="inline-start" />
+                    Scan
+                  </Button>
+                ) : null}
+              </div>
+              {scanning ? (
+                <IsbnBarcodeScanner
+                  onDetect={(isbn) => {
+                    setRaw((prev) => {
+                      const next = appendIsbnToInput(prev, isbn)
+                      if (next === prev) {
+                        toast.message("Already scanned")
+                        return prev
+                      }
+                      toast.success(`Scanned ${isbn}`)
+                      return next
+                    })
+                  }}
+                  onCancel={() => setScanning(false)}
+                  onError={(message) => {
+                    toast.error(message)
+                    setScanning(false)
+                  }}
+                  onInvalid={() => toast.error("Not an ISBN barcode")}
+                />
+              ) : (
+                <Textarea
+                  id="isbn"
+                  name="isbn"
+                  value={raw}
+                  onChange={(event) => setRaw(event.target.value)}
+                  placeholder={"9780143127741\n9780143127742"}
+                  autoComplete="off"
+                  rows={3}
+                />
+              )}
+              {scanning && displayIsbns.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {displayIsbns.length === 1
+                    ? "1 scanned"
+                    : `${displayIsbns.length} scanned`}
+                </p>
+              ) : null}
+              {lookingUp && !isBulk && !scanning ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Spinner />
                   Looking up…
@@ -450,7 +502,7 @@ export function AddBookSheet() {
             </Field>
           </FieldGroup>
 
-          {isBulk ? (
+          {scanning ? null : isBulk ? (
             <ul className="flex flex-col gap-2">
               {displayIsbns.map((isbn) => (
                 <LookupResultRow
@@ -565,40 +617,42 @@ export function AddBookSheet() {
             </>
           )}
         </div>
-        <SheetFooter>
-          {isBulk ? (
-            <Button
-              onClick={() => void handleAddAll()}
-              disabled={saving || addableIsbns.length === 0}
-            >
-              {saving
-                ? "Saving…"
-                : addableIsbns.length > 0
-                  ? `Add all (${addableIsbns.length})`
-                  : "Add all"}
-            </Button>
-          ) : manualOpen ? (
-            <Button
-              type="submit"
-              form="manual-add-form"
-              disabled={!singleIsbn || !title.trim() || alreadyInLibrary || saving}
-            >
-              {saving ? "Saving…" : "Save to library"}
-            </Button>
-          ) : singleRow?.status === "found" && !alreadyInLibrary ? (
-            <Button onClick={() => void handleSavePreview()} disabled={saving}>
-              {saving ? "Saving…" : "Save to library"}
-            </Button>
-          ) : (
-            <Button
-              onClick={() => void handleSaveIsbnOnly()}
-              disabled={!singleIsbn || alreadyInLibrary || saving}
-              variant={singleRow?.book ? "default" : "outline"}
-            >
-              {saving ? "Saving…" : "Save ISBN for later lookup"}
-            </Button>
-          )}
-        </SheetFooter>
+        {scanning ? null : (
+          <SheetFooter>
+            {isBulk ? (
+              <Button
+                onClick={() => void handleAddAll()}
+                disabled={saving || addableIsbns.length === 0}
+              >
+                {saving
+                  ? "Saving…"
+                  : addableIsbns.length > 0
+                    ? `Add all (${addableIsbns.length})`
+                    : "Add all"}
+              </Button>
+            ) : manualOpen ? (
+              <Button
+                type="submit"
+                form="manual-add-form"
+                disabled={!singleIsbn || !title.trim() || alreadyInLibrary || saving}
+              >
+                {saving ? "Saving…" : "Save to library"}
+              </Button>
+            ) : singleRow?.status === "found" && !alreadyInLibrary ? (
+              <Button onClick={() => void handleSavePreview()} disabled={saving}>
+                {saving ? "Saving…" : "Save to library"}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => void handleSaveIsbnOnly()}
+                disabled={!singleIsbn || alreadyInLibrary || saving}
+                variant={singleRow?.book ? "default" : "outline"}
+              >
+                {saving ? "Saving…" : "Save ISBN for later lookup"}
+              </Button>
+            )}
+          </SheetFooter>
+        )}
       </SheetContent>
     </Sheet>
   )
