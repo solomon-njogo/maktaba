@@ -5,8 +5,12 @@ Solomon Njogo's record of his physical books and where each one sits in his read
 ## Language
 
 **Book**:
-A physical volume Solomon tracks, whether it is on the shelf, Borrowed, or not yet acquired.
+A physical volume Solomon tracks, whether it is on the shelf, Borrowed, or not yet acquired. Each one has an ISBN.
 _Avoid_: Ebook, file
+
+**ISBN**:
+The identifier of a book. A volume with no ISBN is not tracked.
+_Avoid_: Barcode
 
 **Status**:
 The pipeline state of a book: Reading, Done, TBR, or To-Buy.
