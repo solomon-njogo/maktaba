@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 
 import { BookDetail } from "@/components/books/book-detail"
 import { BookNotFound } from "@/components/books/book-not-found"
+import { LibraryHome } from "@/components/books/library-home"
 import { LibraryView } from "@/components/books/library-view"
 import { useBook } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
@@ -126,14 +127,7 @@ function RouteView({ path }: { path: string }) {
     return <PendingQueueView />
   }
 
-  return (
-    <LibraryView
-      title="Library"
-      description="Every title currently on the shelves."
-      emptyVariant="library"
-      showTotal
-    />
-  )
+  return <LibraryHome />
 }
 
 export function ClientOutlet({ children }: { children: ReactNode }) {
