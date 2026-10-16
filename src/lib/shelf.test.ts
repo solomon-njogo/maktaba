@@ -3,7 +3,14 @@ import { describe, it } from "node:test"
 
 import type { LocalBook } from "@/lib/offline/types"
 
-import { booksWaitingToStart, pickReadingCard, shelfCounts } from "./shelf.ts"
+import {
+  booksWaitingToStart,
+  destinations,
+  pickReadingCard,
+  screenForPath,
+  shelfCounts,
+  showsPhoneBar,
+} from "./shelf.ts"
 
 function book(overrides: Partial<LocalBook> & Pick<LocalBook, "Title" | "Status">): LocalBook {
   return {
@@ -131,6 +138,68 @@ describe("Reading card", () => {
     ])
 
     assert.equal(card, null)
+  })
+})
+
+describe("path screens", () => {
+  it("opens Home from / and shows the phone bar", () => {
+    assert.equal(screenForPath("/"), "home")
+    assert.equal(showsPhoneBar("/"), true)
+  })
+
+  it("opens Add from /add and shows the phone bar", () => {
+    assert.equal(screenForPath("/add"), "add")
+    assert.equal(showsPhoneBar("/add"), true)
+  })
+
+  it("opens Library from /library and shows the phone bar", () => {
+    assert.equal(screenForPath("/library"), "library")
+    assert.equal(showsPhoneBar("/library"), true)
+  })
+
+  it("hides the phone bar until the path is known", () => {
+    assert.equal(screenForPath(""), "not-found")
+    assert.equal(showsPhoneBar(""), false)
+  })
+
+  it("opens a book from /books/:isbn and hides the phone bar", () => {
+    assert.equal(screenForPath("/books/9780143127743"), "book")
+    assert.equal(showsPhoneBar("/books/9780143127743"), false)
+    assert.equal(screenForPath("/books/9780143127743/"), "book")
+    assert.equal(showsPhoneBar("/books/9780143127743/"), false)
+  })
+
+  it("opens Library from the old shelf paths and shows the phone bar", () => {
+    for (const path of ["/tbr", "/reading", "/done", "/to-buy", "/borrowed"]) {
+      assert.equal(screenForPath(path), "library")
+      assert.equal(showsPhoneBar(path), true)
+    }
+  })
+
+  it("opens Design system and keeps the phone bar", () => {
+    assert.equal(screenForPath("/design-system"), "design-system")
+    assert.equal(showsPhoneBar("/design-system"), true)
+  })
+
+  it("lists only Home, Add, and Library as destinations", () => {
+    assert.deepEqual(
+      destinations.map((item) => ({ href: item.href, label: item.label })),
+      [
+        { href: "/", label: "Home" },
+        { href: "/add", label: "Add" },
+        { href: "/library", label: "Library" },
+      ]
+    )
+  })
+
+  it("opens the queue from /pending and shows the phone bar", () => {
+    assert.equal(screenForPath("/pending"), "pending")
+    assert.equal(showsPhoneBar("/pending"), true)
+  })
+
+  it("opens Home from the offline fallback and shows the phone bar", () => {
+    assert.equal(screenForPath("/~offline"), "home")
+    assert.equal(showsPhoneBar("/~offline"), true)
   })
 })
 

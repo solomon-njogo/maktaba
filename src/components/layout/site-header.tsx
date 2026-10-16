@@ -2,15 +2,16 @@
 
 import Link from "next/link"
 
-import { DESKTOP_NAV } from "@/components/layout/nav"
 import { AppLink } from "@/components/offline/app-link"
 import { useAppPath } from "@/components/offline/app-path"
 import { SyncStatusBadge } from "@/components/offline/sync-status"
 import { buttonVariants } from "@/components/ui/button"
+import { destinations, screenForPath } from "@/lib/shelf"
 import { cn } from "@/lib/utils"
 
 export function SiteHeader() {
-  const pathname = useAppPath() ?? ""
+  const pathname = useAppPath()
+  const screen = pathname ? screenForPath(pathname) : null
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 pt-[max(0.75rem,var(--spacing-safe-top))] backdrop-blur-sm">
@@ -37,9 +38,9 @@ export function SiteHeader() {
             </Link>
           </div>
         </div>
-        <nav className="-mx-1 hidden gap-1 md:flex">
-          {DESKTOP_NAV.map((item) => {
-            const active = pathname === item.href
+        <nav className="-mx-1 hidden gap-1 md:flex" aria-label="Primary">
+          {destinations.map((item) => {
+            const active = screen !== null && screen === screenForPath(item.href)
             return (
               <AppLink
                 key={item.href}
@@ -51,6 +52,7 @@ export function SiteHeader() {
                   }),
                   "shrink-0"
                 )}
+                aria-current={active ? "page" : undefined}
               >
                 {item.label}
               </AppLink>

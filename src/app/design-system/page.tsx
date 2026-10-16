@@ -112,13 +112,14 @@ export default function DesignSystemPage() {
           <ul className="flex list-disc flex-col gap-2 pl-5 text-muted-foreground">
             <li>
               Below <span className="font-mono text-foreground">md</span>{" "}
-              (768px): compact header, bottom tabs (Library, TBR, Reading,
-              Done, More). Add book is a bottom-right floating button above
-              the tab bar and opens a bottom sheet.
+              (768px): compact header and a bottom bar with Home, Add, and
+              Library. A book page hides that bar. Design system is not in
+              the bar.
             </li>
             <li>
-              From <span className="font-mono text-foreground">md</span>: full
-              top nav, the same floating button, a side sheet for add-book, compact{" "}
+              From <span className="font-mono text-foreground">md</span>: the
+              same three links sit in the header, including on a book page,
+              with Design system as a header link. Compact{" "}
               <span className="font-mono text-foreground">h-control</span>{" "}
               controls.
             </li>

@@ -187,7 +187,7 @@ export function BookDetail({
     <PageShell>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <AppLink
-          href="/"
+          href="/library"
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
             "-ml-2"

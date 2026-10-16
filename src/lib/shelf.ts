@@ -1,5 +1,54 @@
 import type { LocalBook } from "@/lib/offline/types"
 
+export const destinations = [
+  { href: "/", label: "Home" },
+  { href: "/add", label: "Add" },
+  { href: "/library", label: "Library" },
+] as const
+
+export type Screen =
+  | "home"
+  | "add"
+  | "library"
+  | "book"
+  | "design-system"
+  | "pending"
+  | "not-found"
+
+const LIBRARY_PATHS = new Set([
+  "/library",
+  "/tbr",
+  "/reading",
+  "/done",
+  "/to-buy",
+  "/borrowed",
+])
+
+function normalizePath(pathname: string) {
+  const withoutHash = pathname.split("#")[0] ?? "/"
+  const path = withoutHash.split("?")[0] ?? "/"
+  if (path.length > 1 && path.endsWith("/")) return path.slice(0, -1)
+  return path
+}
+
+export function screenForPath(pathname: string): Screen {
+  const path = normalizePath(pathname)
+  if (path === "/" || path === "/~offline") return "home"
+  if (path === "/add") return "add"
+  if (LIBRARY_PATHS.has(path)) return "library"
+  if (path === "/design-system" || path.startsWith("/design-system/")) {
+    return "design-system"
+  }
+  if (path === "/pending") return "pending"
+  if (/^\/books\/[^/]+$/.test(path)) return "book"
+  return "not-found"
+}
+
+export function showsPhoneBar(pathname: string) {
+  if (!normalizePath(pathname)) return false
+  return screenForPath(pathname) !== "book"
+}
+
 export function isOnShelf(book: LocalBook) {
   return book.Status !== "To-Buy"
 }
