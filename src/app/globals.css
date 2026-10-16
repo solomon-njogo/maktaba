@@ -51,6 +51,8 @@
   --color-status-to-buy-foreground: var(--status-to-buy-foreground);
   --color-status-borrowed: var(--status-borrowed);
   --color-status-borrowed-foreground: var(--status-borrowed-foreground);
+  --color-summary: var(--summary);
+  --color-summary-foreground: var(--summary-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -68,35 +70,41 @@
   --size-control: 2rem;
 }
 
-/* Light tokens exist so the palette is complete; the app defaults to dark. */
+/* Warm light canvas. This is the only theme the app applies. */
 :root {
   --page-gutter: 1rem;
-  --background: oklch(0.99 0.002 264);
-  --foreground: oklch(0.145 0.005 264);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.005 264);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.005 264);
-  --surface: oklch(0.97 0.004 264);
-  --surface-foreground: oklch(0.145 0.005 264);
-  --primary: oklch(0.145 0.005 264);
-  --primary-foreground: oklch(0.99 0.002 264);
-  --secondary: oklch(0.96 0.004 264);
-  --secondary-foreground: oklch(0.205 0.005 264);
-  --muted: oklch(0.96 0.004 264);
-  --muted-foreground: oklch(0.5 0.01 264);
-  --accent: oklch(0.96 0.004 264);
-  --accent-foreground: oklch(0.205 0.005 264);
+  /* Canvas #E7E2DA */
+  --background: oklch(0.905 0.014 85);
+  --foreground: oklch(0.24 0.012 70);
+  /* Frosted card #FBF9F6 */
+  --card: oklch(0.985 0.006 90);
+  --card-foreground: oklch(0.24 0.012 70);
+  --popover: oklch(0.985 0.006 90);
+  --popover-foreground: oklch(0.24 0.012 70);
+  --surface: oklch(0.94 0.012 85);
+  --surface-foreground: oklch(0.24 0.012 70);
+  --primary: oklch(0.24 0.012 70);
+  --primary-foreground: oklch(0.97 0.008 90);
+  --secondary: oklch(0.94 0.012 85);
+  --secondary-foreground: oklch(0.28 0.012 70);
+  --muted: oklch(0.93 0.012 85);
+  --muted-foreground: oklch(0.48 0.02 70);
+  --accent: oklch(0.94 0.012 85);
+  --accent-foreground: oklch(0.28 0.012 70);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.006 264);
-  --input: oklch(0.9 0.006 264);
-  --ring: oklch(0.55 0.01 264);
+  /* Boundary #D9D3C9 */
+  --border: oklch(0.86 0.016 80);
+  --input: oklch(0.86 0.016 80);
+  --ring: oklch(0.55 0.02 70);
+  /* Summary panel #1C1C1E */
+  --summary: oklch(0.22 0.01 70);
+  --summary-foreground: oklch(0.96 0.008 90);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0.002 264);
   --sidebar-foreground: oklch(0.145 0.005 264);
   --sidebar-primary: oklch(0.205 0.005 264);
@@ -117,6 +125,7 @@
   --status-borrowed-foreground: oklch(0.38 0.03 310);
 }
 
+/* Kept so a `.dark` ancestor still resolves. The app never applies this class. */
 .dark {
   /* Surface Dark #0A0A0C */
   --background: oklch(0.13 0.005 264);

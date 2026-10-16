@@ -154,14 +154,25 @@ export function LibraryHome() {
 
   return (
     <PageShell>
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl sm:text-3xl">Library</h1>
-          <p className="text-sm text-muted-foreground sm:text-base">
-            Every book on the shelf.
-          </p>
-        </div>
-        {ready && shelf.length > 0 ? (
+      {ready && shelf.length > 0 ? (
+        <header className="flex flex-col gap-4">
+          <h1 className="sr-only">Library</h1>
+          <section aria-label="Shelf summary">
+            <dl className="grid grid-cols-3 gap-2 rounded-2xl bg-summary px-3 py-2.5 text-summary-foreground sm:px-4">
+              <div className="min-w-0">
+                <dt className="text-xs text-summary-foreground/70">Shelf</dt>
+                <dd className="text-sm tabular-nums sm:text-base">{shelf.length}</dd>
+              </div>
+              <div className="min-w-0 border-l border-white/15 pl-3">
+                <dt className="text-xs text-summary-foreground/70">Reading</dt>
+                <dd className="text-sm tabular-nums sm:text-base">{readingCount}</dd>
+              </div>
+              <div className="min-w-0 border-l border-white/15 pl-3">
+                <dt className="text-xs text-summary-foreground/70">Borrowed</dt>
+                <dd className="text-sm tabular-nums sm:text-base">{borrowedCount}</dd>
+              </div>
+            </dl>
+          </section>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="library-search" className="sr-only">
@@ -238,8 +249,8 @@ export function LibraryHome() {
               </div>
             </Field>
           </FieldGroup>
-        ) : null}
-      </header>
+        </header>
+      ) : null}
 
       {!ready ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -250,23 +261,6 @@ export function LibraryHome() {
         <BookEmpty variant="library" />
       ) : (
         <>
-          <section aria-label="Shelf summary">
-            <dl className="grid grid-cols-3 gap-2 rounded-2xl bg-summary px-3 py-2.5 text-summary-foreground sm:px-4">
-              <div className="min-w-0">
-                <dt className="text-xs text-summary-foreground/70">Shelf</dt>
-                <dd className="text-sm tabular-nums sm:text-base">{shelf.length}</dd>
-              </div>
-              <div className="min-w-0 border-l border-white/15 pl-3">
-                <dt className="text-xs text-summary-foreground/70">Reading</dt>
-                <dd className="text-sm tabular-nums sm:text-base">{readingCount}</dd>
-              </div>
-              <div className="min-w-0 border-l border-white/15 pl-3">
-                <dt className="text-xs text-summary-foreground/70">Borrowed</dt>
-                <dd className="text-sm tabular-nums sm:text-base">{borrowedCount}</dd>
-              </div>
-            </dl>
-          </section>
-
           {continueBook ? (
             <section className="flex flex-col gap-3">
               <h2 className="text-base">Continue Reading</h2>
