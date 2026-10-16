@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A minimal tracker for a personal physical library.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0A0A0C",
-    theme_color: "#0A0A0C",
+    background_color: "#E7E2DA",
+    theme_color: "#E7E2DA",
     icons: [
       {
         src: "/icon-192x192.png",

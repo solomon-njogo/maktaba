@@ -7,7 +7,8 @@
     "dev": "npm run dev --prefix src",
     "build": "npm run build --prefix src",
     "start": "npm run start --prefix src",
-    "lint": "npm run lint --prefix src"
+    "lint": "npm run lint --prefix src",
+    "test": "npm test --prefix src"
   },
   "repository": {
     "type": "git",

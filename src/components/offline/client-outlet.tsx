@@ -2,8 +2,10 @@
 
 import type { ReactNode } from "react"
 
+import { AddBookPage } from "@/components/books/add-book-page"
 import { BookDetail } from "@/components/books/book-detail"
 import { BookNotFound } from "@/components/books/book-not-found"
+import { LibraryHome } from "@/components/books/library-home"
 import { LibraryView } from "@/components/books/library-view"
 import { useBook } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
@@ -13,19 +15,9 @@ import { PendingQueueView } from "@/components/offline/pending-queue"
 import { buttonVariants } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { cleanIsbnString } from "@/lib/isbn"
-import { bookIsbnFromPath, isDesignSystemPath } from "@/lib/offline/navigation"
+import { bookIsbnFromPath } from "@/lib/offline/navigation"
+import { screenForPath } from "@/lib/shelf"
 import { cn } from "@/lib/utils"
-
-const LIST_PATHS = new Set([
-  "/",
-  "/tbr",
-  "/reading",
-  "/done",
-  "/to-buy",
-  "/borrowed",
-  "/pending",
-  "/~offline",
-])
 
 function BookRoute({ isbn }: { isbn: string }) {
   const { book, ready, missing } = useBook(isbn)
@@ -46,27 +38,7 @@ function BookRoute({ isbn }: { isbn: string }) {
   return <BookDetail book={book} />
 }
 
-function RouteView({ path }: { path: string }) {
-  const isbn = bookIsbnFromPath(path)
-
-  if (isbn) {
-    return <BookRoute isbn={cleanIsbnString(isbn) || isbn} />
-  }
-
-  if (!LIST_PATHS.has(path)) {
-    return (
-      <PageShell className="gap-4 py-16">
-        <h1 className="text-2xl">Page not found</h1>
-        <p className="text-sm text-muted-foreground sm:text-base">
-          That screen is not part of the library.
-        </p>
-        <AppLink href="/" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>
-          Back to library
-        </AppLink>
-      </PageShell>
-    )
-  }
-
+function LibraryRoute({ path }: { path: string }) {
   if (path === "/tbr") {
     return (
       <LibraryView
@@ -122,18 +94,42 @@ function RouteView({ path }: { path: string }) {
     )
   }
 
-  if (path === "/pending") {
-    return <PendingQueueView />
-  }
-
   return (
     <LibraryView
       title="Library"
-      description="Every title currently on the shelves."
-      emptyVariant="library"
+      description="Every book in the catalog."
       showTotal
     />
   )
+}
+
+function NotFound() {
+  return (
+    <PageShell className="gap-4 py-16">
+      <h1 className="text-2xl">Page not found</h1>
+      <p className="text-sm text-muted-foreground sm:text-base">
+        That screen is not part of the library.
+      </p>
+      <AppLink href="/" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>
+        Back home
+      </AppLink>
+    </PageShell>
+  )
+}
+
+function RouteView({ path }: { path: string }) {
+  const screen = screenForPath(path)
+
+  if (screen === "book") {
+    const isbn = bookIsbnFromPath(path)
+    return <BookRoute isbn={cleanIsbnString(isbn ?? "") || isbn || ""} />
+  }
+
+  if (screen === "add") return <AddBookPage />
+  if (screen === "pending") return <PendingQueueView />
+  if (screen === "library") return <LibraryRoute path={path} />
+  if (screen === "not-found") return <NotFound />
+  return <LibraryHome />
 }
 
 export function ClientOutlet({ children }: { children: ReactNode }) {
@@ -148,7 +144,7 @@ export function ClientOutlet({ children }: { children: ReactNode }) {
     )
   }
 
-  if (isDesignSystemPath(path)) {
+  if (screenForPath(path) === "design-system") {
     return children
   }
 

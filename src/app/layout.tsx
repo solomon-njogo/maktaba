@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   applicationName: "Maktaba",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Maktaba",
   },
 }
@@ -42,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <SerwistProvider
@@ -51,7 +51,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
+            defaultTheme="light"
+            forcedTheme="light"
             enableSystem={false}
           >
             <TooltipProvider>
@@ -62,10 +63,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 </div>
                 <SiteTabBar />
                 <Toaster
-                  offset={{ bottom: 16 }}
+                  theme="light"
+                  offset={{ bottom: "6rem" }}
                   mobileOffset={{
                     bottom:
-                      "calc(var(--spacing-tab-bar) + var(--spacing-safe-bottom) + 8px)",
+                      "calc(var(--spacing-tab-bar) + var(--spacing-safe-bottom) + 5.25rem)",
                   }}
                 />
               </LibraryProvider>

@@ -1,6 +1,6 @@
 # UI Foundations & Design System
 
-Dark-first, high-contrast, and built on [shadcn/ui](https://ui.shadcn.com) primitives. Browse the living catalog at `/design-system`.
+A warm light system, built on [shadcn/ui](https://ui.shadcn.com) primitives. Browse the living catalog at `/design-system`. See ADR 0001.
 
 ## Layers
 
@@ -11,18 +11,19 @@ Dark-first, high-contrast, and built on [shadcn/ui](https://ui.shadcn.com) primi
 
 ## Palette
 
-Documented hex values map onto semantic tokens (OKLCH, near-zero chroma):
+Documented hex values map onto semantic tokens (OKLCH, warm hue):
 
-| Name | Hex | Token (dark) |
+| Name | Hex | Token |
 | :--- | :--- | :--- |
-| Surface Dark | `#0A0A0C` | `--background` |
-| Surface Elevated | `#141417` | `--card`, `--popover`, `--surface` |
-| Primary Accent | `#FFFFFF` | `--foreground`, `--primary` |
-| Muted Boundary | `#26262B` | `--border`, `--input` |
+| Canvas | `#E7E2DA` | `--background` |
+| Frosted card | `#FBF9F6` | `--card`, `--popover` |
+| Ink | `#1C1917` | `--foreground`, `--primary` |
+| Summary panel | `#1C1C1E` | `--summary` |
+| Boundary | `#D9D3C9` | `--border`, `--input` |
 
-`--primary-foreground` is near-black so primary buttons stay ink-on-white. `--destructive` stays the shadcn red for remove/delete.
+Cards are frosted (`bg-card/80`, blur, soft shadow). The summary panel uses `bg-summary` and `text-summary-foreground`. `--primary-foreground` is light so primary buttons stay light-on-ink. `--destructive` stays the shadcn red for remove/delete.
 
-Light `:root` values exist so tokens resolve; the app defaults to `class="dark"` via `next-themes` (`defaultTheme="dark"`, system preference off).
+The app forces this light theme (`forcedTheme="light"`). It does not follow the system palette.
 
 ## Status tokens
 
@@ -52,8 +53,8 @@ Generic tags, counts, and chrome use `Badge` from `components/ui`. Pipeline and 
 | `size-touch` / `min-h-touch` (44px) | Phone chrome and card overflow |
 | `size-control` (2rem) | Compact `md+` controls |
 
-- **Below `md`:** compact header (wordmark, sync, Add), bottom tabs (Library, TBR, Reading, Done, More). Add-book is a bottom sheet. Lists use a horizontal cover + meta row.
-- **From `md`:** full top shelf nav, add-book as a right sheet, two-column library grid.
+- **Below `md`:** compact header (wordmark, sync), bottom tabs (Library, TBR, Reading, Done, More). Add book is a floating action button at the bottom right, above the tab bar, and opens a bottom sheet. Library home is a cover grid whose columns follow width. Other lists use a horizontal cover + meta row.
+- **From `md`:** full top shelf nav. The same floating action button sits at the bottom right and opens add-book as a right sheet. Library home keeps the same sections with more columns. Other shelves use a two-column list.
 - Overlays (sheet, dialog, dropdown) sit above the tab bar (`z-50` vs `z-30`). Toasts offset above the tab bar on phones.
 
 ## Typography

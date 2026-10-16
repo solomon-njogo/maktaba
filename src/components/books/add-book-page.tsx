@@ -12,6 +12,7 @@ import {
   useCameraAvailable,
 } from "@/components/books/isbn-barcode-scanner"
 import { useLibrary } from "@/components/books/library-provider"
+import { PageShell } from "@/components/layout/page-shell"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -19,19 +20,9 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { ApiError, lookupBook } from "@/lib/api/books"
-import { useMdUp } from "@/hooks/use-md-up"
 import {
   appendIsbnToInput,
   debouncedIsbn10Candidate,
@@ -59,10 +50,8 @@ type LookupRow = {
 const OFFLINE_LOOKUP_ERROR =
   "Catalog lookup needs a network. Enter the title below, or save the ISBN to look up later."
 
-export function AddBookSheet() {
-  const mdUp = useMdUp()
+export function AddBookPage() {
   const { books } = useLibrary()
-  const [open, setOpen] = useState(false)
   const [raw, setRaw] = useState("")
   const [rows, setRows] = useState<Record<string, LookupRow>>({})
   const [manualOpen, setManualOpen] = useState(false)
@@ -220,8 +209,6 @@ export function AddBookSheet() {
   }
 
   useEffect(() => {
-    if (!open) return
-
     const gen = generationRef.current
     const immediate = immediateLookupIsbns(raw)
     const delayed = debouncedIsbn10Candidate(raw)
@@ -255,7 +242,7 @@ export function AddBookSheet() {
     return () => window.clearTimeout(timer)
     // runLookup reads only refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raw])
+  }, [raw])
 
   useEffect(() => {
     if (!singleIsbn || isBulk) return
@@ -285,7 +272,6 @@ export function AddBookSheet() {
         Status: singleRow?.book?.Status,
       })
       toast.success(`Added ${saved.Title}`)
-      setOpen(false)
       reset()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not add book.")
@@ -300,7 +286,6 @@ export function AddBookSheet() {
     try {
       const saved = await createLocalBook(singleIsbn)
       toast.success(`Queued ${saved.ISBN}`)
-      setOpen(false)
       reset()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not add book.")
@@ -321,7 +306,6 @@ export function AddBookSheet() {
         Status: status,
       })
       toast.success(`Added ${saved.Title}`)
-      setOpen(false)
       reset()
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not add book.")
@@ -399,7 +383,6 @@ export function AddBookSheet() {
         if (skipped) bits.push(`${skipped} already in library`)
         if (failed) bits.push(`${failed} failed`)
         toast.success(bits.join(" · "))
-        setOpen(false)
         reset()
       } else if (failed) {
         toast.error("Could not add books.")
@@ -410,35 +393,15 @@ export function AddBookSheet() {
   }
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) reset()
-      }}
-    >
-      <SheetTrigger
-        render={
-          <Button
-            size="sm"
-            className="min-h-touch px-3 md:min-h-7 md:px-2.5"
-          />
-        }
-      >
-        Add book
-      </SheetTrigger>
-      <SheetContent
-        side={mdUp ? "right" : "bottom"}
-        className="w-full data-[side=bottom]:max-h-[90dvh] data-[side=right]:sm:max-w-md"
-      >
-        <SheetHeader>
-          <SheetTitle>Add by ISBN</SheetTitle>
-          <SheetDescription>
-            Scan one or more barcodes, or paste ISBNs (comma or newline).
-            Titles look up automatically when online.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
+    <PageShell>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl sm:text-3xl">Add</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">
+          Scan one or more barcodes, or paste ISBNs (comma or newline).
+          Titles look up automatically when online.
+        </p>
+      </header>
+      <div className="flex flex-col gap-4">
           <FieldGroup>
             <Field>
               <div className="flex items-center justify-between gap-2">
@@ -618,7 +581,7 @@ export function AddBookSheet() {
           )}
         </div>
         {scanning ? null : (
-          <SheetFooter>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
             {isBulk ? (
               <Button
                 onClick={() => void handleAddAll()}
@@ -651,10 +614,9 @@ export function AddBookSheet() {
                 {saving ? "Saving…" : "Save ISBN for later lookup"}
               </Button>
             )}
-          </SheetFooter>
+          </div>
         )}
-      </SheetContent>
-    </Sheet>
+    </PageShell>
   )
 }
 
