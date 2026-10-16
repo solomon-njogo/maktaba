@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist_Mono, Inter } from "next/font/google"
 
+import { AddBookSheet } from "@/components/books/add-book-sheet"
 import { LibraryProvider } from "@/components/books/library-provider"
 import { SiteHeader } from "@/components/layout/site-header"
 import { SiteTabBar } from "@/components/layout/site-tab-bar"
@@ -61,11 +62,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   <ClientOutlet>{children}</ClientOutlet>
                 </div>
                 <SiteTabBar />
+                <AddBookSheet />
                 <Toaster
-                  offset={{ bottom: 16 }}
+                  offset={{ bottom: "6rem" }}
                   mobileOffset={{
                     bottom:
-                      "calc(var(--spacing-tab-bar) + var(--spacing-safe-bottom) + 8px)",
+                      "calc(var(--spacing-tab-bar) + var(--spacing-safe-bottom) + 5.25rem)",
                   }}
                 />
               </LibraryProvider>

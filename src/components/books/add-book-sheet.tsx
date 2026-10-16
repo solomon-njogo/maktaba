@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { ScanBarcode } from "lucide-react"
+import { Plus, ScanBarcode } from "lucide-react"
 
 import { BookCard } from "@/components/books/book-card"
 import {
@@ -420,12 +420,12 @@ export function AddBookSheet() {
       <SheetTrigger
         render={
           <Button
-            size="sm"
-            className="min-h-touch px-3 md:min-h-7 md:px-2.5"
+            aria-label="Add book"
+            className="fixed right-4 bottom-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom)+1rem)] z-40 size-14 rounded-full shadow-[0_12px_40px_-18px_oklch(0.35_0.03_70/0.55)] md:right-6 md:bottom-6"
           />
         }
       >
-        Add book
+        <Plus className="size-6" />
       </SheetTrigger>
       <SheetContent
         side={mdUp ? "right" : "bottom"}

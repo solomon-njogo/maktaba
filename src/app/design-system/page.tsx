@@ -113,11 +113,12 @@ export default function DesignSystemPage() {
             <li>
               Below <span className="font-mono text-foreground">md</span>{" "}
               (768px): compact header, bottom tabs (Library, TBR, Reading,
-              Done, More). Overlays use a bottom sheet.
+              Done, More). Add book is a bottom-right floating button above
+              the tab bar and opens a bottom sheet.
             </li>
             <li>
               From <span className="font-mono text-foreground">md</span>: full
-              top nav, side sheet for add-book, compact{" "}
+              top nav, the same floating button, a side sheet for add-book, compact{" "}
               <span className="font-mono text-foreground">h-control</span>{" "}
               controls.
             </li>

@@ -52,8 +52,8 @@ Generic tags, counts, and chrome use `Badge` from `components/ui`. Pipeline and 
 | `size-touch` / `min-h-touch` (44px) | Phone chrome and card overflow |
 | `size-control` (2rem) | Compact `md+` controls |
 
-- **Below `md`:** compact header (wordmark, sync, Add), bottom tabs (Library, TBR, Reading, Done, More). Add-book is a bottom sheet. Lists use a horizontal cover + meta row.
-- **From `md`:** full top shelf nav, add-book as a right sheet, two-column library grid.
+- **Below `md`:** compact header (wordmark, sync), bottom tabs (Library, TBR, Reading, Done, More). Add book is a floating action button at the bottom right, above the tab bar, and opens a bottom sheet. Lists use a horizontal cover + meta row.
+- **From `md`:** full top shelf nav. The same floating action button sits at the bottom right and opens add-book as a right sheet. Lists use a two-column library grid.
 - Overlays (sheet, dialog, dropdown) sit above the tab bar (`z-50` vs `z-30`). Toasts offset above the tab bar on phones.
 
 ## Typography

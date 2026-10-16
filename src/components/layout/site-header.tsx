@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 
-import { AddBookSheet } from "@/components/books/add-book-sheet"
 import { DESKTOP_NAV } from "@/components/layout/nav"
 import { AppLink } from "@/components/offline/app-link"
 import { useAppPath } from "@/components/offline/app-path"
@@ -36,7 +35,6 @@ export function SiteHeader() {
             >
               Design system
             </Link>
-            <AddBookSheet />
           </div>
         </div>
         <nav className="-mx-1 hidden gap-1 md:flex">
