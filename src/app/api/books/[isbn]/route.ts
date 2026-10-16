@@ -27,7 +27,11 @@ export async function PATCH(request: Request, context: BookContext) {
     const { isbn: raw } = await context.params
     const isbn = requireIsbn(raw)
     const patch = (await request.json().catch(() => ({}))) as BookUpdatePayload
-    const book = await updateBook(isbn, patch ?? {})
+    const book = await updateBook(
+      isbn,
+      patch ?? {},
+      request.headers.get("x-record-id") ?? undefined
+    )
     return NextResponse.json(book)
   } catch (error) {
     return jsonError(error)
@@ -38,7 +42,10 @@ export async function DELETE(_request: Request, context: BookContext) {
   try {
     const { isbn: raw } = await context.params
     const isbn = requireIsbn(raw)
-    const book = await softDeleteBook(isbn)
+    const book = await softDeleteBook(
+      isbn,
+      _request.headers.get("x-record-id") ?? undefined
+    )
     return NextResponse.json(book)
   } catch (error) {
     return jsonError(error)
