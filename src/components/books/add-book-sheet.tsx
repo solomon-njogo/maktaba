@@ -421,7 +421,7 @@ export function AddBookSheet() {
         render={
           <Button
             aria-label="Add book"
-            className="fixed right-4 bottom-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom)+1rem)] z-40 size-14 rounded-full shadow-[0_12px_40px_-18px_oklch(0.35_0.03_70/0.55)] md:right-6 md:bottom-6"
+            className="fixed right-4 bottom-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom)+1rem)] z-40 size-14 rounded-full shadow-lg md:right-6 md:bottom-[calc(var(--spacing-safe-bottom)+1.5rem)]"
           />
         }
       >
