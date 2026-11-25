@@ -11,10 +11,12 @@ import type {
   BorrowedFlag,
   FormattedBookResponse,
 } from "@/types/books"
-import { StatusBadge } from "@/components/books/status-badge"
+import { BorrowedBadge, StatusBadge } from "@/components/books/status-badge"
+import { StatusPipelineBar } from "@/components/books/status-picker"
 import { AppLink } from "@/components/offline/app-link"
 import { PageShell } from "@/components/layout/page-shell"
 import { navigateApp } from "@/lib/offline/navigation"
+import { formatCalendarDate } from "@/lib/status"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,16 +79,7 @@ function formFromBook(book: FormattedBookResponse): BookFormState {
 }
 
 function displayDate(value?: string) {
-  const iso = asDateInput(value)
-  if (!iso) return "—"
-  const [year, month, day] = iso.split("-").map(Number)
-  if (!year || !month || !day) return iso
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  })
+  return formatCalendarDate(value) || "—"
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -411,7 +404,16 @@ export function BookDetail({
               <header className="flex flex-col gap-3">
                 <h1 className="text-2xl wrap-break-word sm:text-3xl">{book.Title}</h1>
                 <p className="text-muted-foreground">{book.Author || "Unknown author"}</p>
-                <StatusBadge status={book.Status} borrowed={book.Borrowed} />
+                {isbn ? (
+                  <div className="flex flex-col gap-2 pt-1">
+                    <StatusPipelineBar book={book} disabled={pending} />
+                    {book.Borrowed === "Yes" ? (
+                      <BorrowedBadge className="w-fit" />
+                    ) : null}
+                  </div>
+                ) : (
+                  <StatusBadge status={book.Status} borrowed={book.Borrowed} />
+                )}
                 {book.pending ? (
                   <p className="text-xs text-muted-foreground">Waiting to sync</p>
                 ) : null}
