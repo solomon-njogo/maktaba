@@ -7,8 +7,8 @@ import {
   booksWaitingToStart,
   countDestinations,
   destinations,
-  libraryShelfForPath,
-  libraryShelves,
+  libraryViewCounts,
+  libraryViewForFilters,
   pickReadingCard,
   screenForPath,
   shelfCounts,
@@ -241,5 +241,41 @@ describe("start-reading list", () => {
     ])
 
     assert.deepEqual(waiting, [])
+  })
+})
+
+describe("library views", () => {
+  it("counts active books across views and ignores deleted entries", () => {
+    const counts = libraryViewCounts([
+      book({ Title: "A", Status: "TBR" }),
+      book({ Title: "B", Status: "TBR", Borrowed: "Yes" }),
+      book({ Title: "C", Status: "Reading" }),
+      book({ Title: "D", Status: "Done", Borrowed: "Yes" }),
+      book({ Title: "E", Status: "To-Buy" }),
+      book({ Title: "F", Status: "TBR", Borrowed: "Yes", deleted: true }),
+    ])
+
+    assert.deepEqual(counts, {
+      all: 5,
+      tbr: 2,
+      reading: 1,
+      done: 1,
+      toBuy: 1,
+      borrowed: 2,
+    })
+  })
+
+  it("maps active filters to library view keys", () => {
+    assert.equal(libraryViewForFilters(undefined), "all")
+    assert.equal(libraryViewForFilters({}), "all")
+    assert.equal(libraryViewForFilters({ status: "TBR" }), "tbr")
+    assert.equal(libraryViewForFilters({ status: "Reading" }), "reading")
+    assert.equal(libraryViewForFilters({ status: "Done" }), "done")
+    assert.equal(libraryViewForFilters({ status: "To-Buy" }), "toBuy")
+    assert.equal(libraryViewForFilters({ borrowed: "Yes" }), "borrowed")
+    assert.equal(
+      libraryViewForFilters({ status: "TBR", borrowed: "Yes" }),
+      "borrowed"
+    )
   })
 })

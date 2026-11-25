@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react"
 import Image from "next/image"
-import { BookOpenIcon } from "lucide-react"
-import { toast } from "sonner"
+import { BookOpenIcon, CheckIcon } from "lucide-react"
 
 import { useLibrary } from "@/components/books/library-provider"
-import { StatusBadge } from "@/components/books/status-badge"
+import { moveBookStatus } from "@/components/books/move-book-status"
+import { BorrowedBadge, StatusBadge } from "@/components/books/status-badge"
+import { QuickStatusPicker } from "@/components/books/status-picker"
 import { PageShell } from "@/components/layout/page-shell"
 import { AppLink } from "@/components/offline/app-link"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -20,8 +21,6 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { useMdUp } from "@/hooks/use-md-up"
-import { ApiError } from "@/lib/api/books"
-import { updateLocalBook } from "@/lib/offline/books-repository"
 import type { LocalBook } from "@/lib/offline/types"
 import {
   booksWaitingToStart,
@@ -29,6 +28,7 @@ import {
   pickReadingCard,
   shelfCounts,
 } from "@/lib/shelf"
+import { formatCalendarDate } from "@/lib/status"
 import { cn } from "@/lib/utils"
 
 function bookKey(book: LocalBook) {
@@ -42,26 +42,6 @@ function bookHref(book: LocalBook) {
 
 function coverUrl(book: LocalBook) {
   return book.coverUrl ?? book.Thumbnail
-}
-
-function localToday() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const day = String(now.getDate()).padStart(2, "0")
-  return `${now.getFullYear()}-${month}-${day}`
-}
-
-function displayDate(value?: string) {
-  const iso = value?.slice(0, 10) ?? ""
-  if (!iso) return ""
-  const [year, month, day] = iso.split("-").map(Number)
-  if (!year || !month || !day) return iso
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  })
 }
 
 function CoverArt({
@@ -171,7 +151,18 @@ export function LibraryHome() {
 
 function ReadingCard({ book }: { book: LocalBook }) {
   const href = bookHref(book)
-  const started = displayDate(book.StartDate)
+  const started = formatCalendarDate(book.StartDate)
+  const [pending, setPending] = useState(false)
+
+  async function handleMarkDone() {
+    if (!book.ISBN || pending) return
+    setPending(true)
+    try {
+      await moveBookStatus(book, "Done")
+    } finally {
+      setPending(false)
+    }
+  }
 
   return (
     <article className="rounded-2xl bg-card/80 p-3 shadow-[0_12px_40px_-18px_oklch(0.35_0.03_70/0.45)] ring-1 ring-foreground/10 backdrop-blur-xl sm:p-4">
@@ -183,21 +174,42 @@ function ReadingCard({ book }: { book: LocalBook }) {
           {book.Author ? (
             <p className="text-sm text-muted-foreground">{book.Author}</p>
           ) : null}
-          <StatusBadge status={book.Status} borrowed={book.Borrowed} />
+          {book.ISBN ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <QuickStatusPicker book={book} disabled={pending} />
+              {book.Borrowed === "Yes" ? <BorrowedBadge /> : null}
+            </div>
+          ) : (
+            <StatusBadge status={book.Status} borrowed={book.Borrowed} />
+          )}
           {started ? (
             <p className="text-xs text-muted-foreground">Started {started}</p>
           ) : null}
-          {href ? (
-            <AppLink
-              href={href}
-              className={cn(
-                buttonVariants({ size: "sm" }),
-                "mt-1 h-touch rounded-full bg-white px-4 text-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-white/90 md:h-8"
-              )}
-            >
-              Continue
-            </AppLink>
-          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {book.ISBN ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleMarkDone()}
+                className="h-touch rounded-full px-4 md:h-8"
+              >
+                <CheckIcon data-icon="inline-start" />
+                Mark done
+              </Button>
+            ) : null}
+            {href ? (
+              <AppLink
+                href={href}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-touch rounded-full bg-white px-4 text-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-white/90 md:h-8"
+                )}
+              >
+                Open
+              </AppLink>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>
@@ -213,13 +225,8 @@ function StartReadingCard({ books }: { books: LocalBook[] }) {
     if (!book.ISBN || pendingIsbn) return
     setPendingIsbn(book.ISBN)
     try {
-      await updateLocalBook(book.ISBN, {
-        Status: "Reading",
-        StartDate: localToday(),
-      })
-      setOpen(false)
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not start reading.")
+      const moved = await moveBookStatus(book, "Reading")
+      if (moved) setOpen(false)
     } finally {
       setPendingIsbn(null)
     }

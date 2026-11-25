@@ -7,7 +7,7 @@ A warm light system, built on [shadcn/ui](https://ui.shadcn.com) primitives. Bro
 1. **Tokens** — CSS variables in `src/app/globals.css`, exposed as Tailwind utilities (`bg-background`, `max-w-page`, `px-page-x`, `size-touch`, …).
 2. **Primitives** — generated components in `src/components/ui/`. Do not restyle their colors from call sites.
 3. **Layout** — `PageShell`, `SiteHeader`, `SiteTabBar` in `src/components/layout/`.
-4. **Composites** — Maktaba pieces in `src/components/books/` (`StatusBadge`, `BookCard`, `BookEmpty`).
+4. **Composites** — Maktaba pieces in `src/components/books/` (`StatusBadge`, `QuickStatusPicker`, `StatusPipelineBar`, `BookCard`, `BookEmpty`).
 
 ## Palette
 
