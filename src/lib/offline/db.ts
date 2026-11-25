@@ -67,6 +67,20 @@ export async function deleteBookRecord(isbn: string): Promise<void> {
   await db.delete("books", isbn)
 }
 
+export async function commitBookChanges(
+  puts: LocalBook[],
+  deletes: string[]
+): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction("books", "readwrite")
+  for (const book of puts) {
+    if (!book.ISBN) continue
+    await tx.store.put(book)
+  }
+  for (const isbn of deletes) await tx.store.delete(isbn)
+  await tx.done
+}
+
 export async function getOutbox(): Promise<OutboxOp[]> {
   const db = await getDb()
   return db.getAllFromIndex("outbox", "by-createdAt")
