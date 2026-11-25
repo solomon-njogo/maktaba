@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/books"
 import {
   deleteBookRecord,
+  getBookByIsbn,
   getLastSyncedAt,
   getOutbox,
   isbnHasOtherOps,
@@ -18,16 +19,21 @@ import {
 import { notifyLibrary } from "./events"
 import { replaceRemoteCatalog, upsertRemoteBook } from "./books-repository"
 import { warmCoverCache } from "./covers"
-import type { SyncStatus } from "./types"
+import type { OutboxOp, SyncStatus } from "./types"
 
 export const BACKGROUND_SYNC_TAG = "maktaba-sync"
 export const PERIODIC_SYNC_TAG = "maktaba-periodic"
 
-let draining = false
 let pulling = false
 let started = false
 let lastError: string | undefined
 let syncing = false
+let work = 0
+let localDrains = 0
+const scheduled = new Set<string>()
+const tails = new Map<string, Promise<void>>()
+const inFlightIsbns = new Set<string>()
+const writtenAt = new Map<string, number>()
 
 type SyncCapableRegistration = ServiceWorkerRegistration & {
   sync?: { register: (tag: string) => Promise<void> }
@@ -38,6 +44,41 @@ type SyncCapableRegistration = ServiceWorkerRegistration & {
 
 function isBrowserOnline() {
   return typeof navigator === "undefined" ? true : navigator.onLine
+}
+
+function beginWork() {
+  work += 1
+  if (syncing) return
+  syncing = true
+  notifyLibrary()
+}
+
+function endWork() {
+  work = Math.max(0, work - 1)
+  if (work > 0 || !syncing) return
+  syncing = false
+  notifyLibrary()
+}
+
+async function withOriginLock(
+  name: string,
+  task: () => Promise<void>
+): Promise<void> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks
+  if (!locks) {
+    await task()
+    return
+  }
+  await locks.request(name, () => task())
+}
+
+function preserveIsbns(startedAt: number): Set<string> {
+  const preserve = new Set(inFlightIsbns)
+  for (const [isbn, at] of writtenAt) {
+    if (at >= startedAt) preserve.add(isbn)
+    else if (startedAt - at > 60_000) writtenAt.delete(isbn)
+  }
+  return preserve
 }
 
 export function getSyncSnapshot(pendingCount: number, lastSyncedAt?: number): SyncStatus {
@@ -85,11 +126,11 @@ export async function requestPeriodicBackgroundSync() {
 export async function pullRemoteCatalog(): Promise<void> {
   if (!isBrowserOnline() || pulling) return
   pulling = true
-  syncing = true
-  notifyLibrary()
+  beginWork()
+  const startedAt = Date.now()
   try {
     const remote = await listBooks()
-    await replaceRemoteCatalog(remote)
+    await replaceRemoteCatalog(remote, preserveIsbns(startedAt))
     await setLastSyncedAt(Date.now())
     lastError = undefined
     warmCoverCache(remote)
@@ -97,101 +138,170 @@ export async function pullRemoteCatalog(): Promise<void> {
     lastError = error instanceof Error ? error.message : "Could not sync library."
   } finally {
     pulling = false
-    syncing = false
-    notifyLibrary()
+    endWork()
   }
 }
 
-export async function drainOutbox(): Promise<void> {
-  if (draining || !isBrowserOnline()) return
-  draining = true
-  syncing = true
-  notifyLibrary()
+type DrainOutcome = "done" | "retry"
 
+function isTerminalClientError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+  )
+}
+
+async function recordIdFor(isbn: string): Promise<string | undefined> {
+  const local = await getBookByIsbn(isbn)
+  return local?.id
+}
+
+async function applyOutboxOp(op: OutboxOp): Promise<DrainOutcome> {
+  inFlightIsbns.add(op.isbn)
   try {
-    const ops = await getOutbox()
-    for (const op of ops) {
+    const outcome = await sendOutboxOp(op)
+    if (outcome === "done") writtenAt.set(op.isbn, Date.now())
+    return outcome
+  } finally {
+    inFlightIsbns.delete(op.isbn)
+  }
+}
+
+async function sendOutboxOp(op: OutboxOp): Promise<DrainOutcome> {
+  try {
+    const recordId = op.type === "create" ? undefined : await recordIdFor(op.isbn)
+    if (op.type === "create") {
+      const created = await addBook(op.isbn, op.payload)
+      await upsertRemoteBook(created, {
+        preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
+      })
+    } else if (op.type === "update") {
+      const updated = await updateBook(op.isbn, op.payload ?? {}, recordId)
+      await upsertRemoteBook(updated, {
+        preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
+      })
+    } else {
+      await removeBook(op.isbn, recordId)
+      await deleteBookRecord(op.isbn)
+    }
+    await removeOutboxOp(op.id)
+    lastError = undefined
+    return "done"
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409 && op.type === "create") {
       try {
-        if (op.type === "create") {
-          const created = await addBook(op.isbn, op.payload)
-          await upsertRemoteBook(created, {
-            preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
-          })
-        } else if (op.type === "update") {
-          const updated = await updateBook(op.isbn, op.payload ?? {})
+        const existing = await getBook(op.isbn)
+        if (op.payload && Object.keys(op.payload).length > 0) {
+          const updated = await updateBook(op.isbn, op.payload)
           await upsertRemoteBook(updated, {
             preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
           })
         } else {
-          await removeBook(op.isbn)
-          await deleteBookRecord(op.isbn)
+          await upsertRemoteBook(existing, {
+            preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
+          })
         }
         await removeOutboxOp(op.id)
         lastError = undefined
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 409 && op.type === "create") {
-          try {
-            const existing = await getBook(op.isbn)
-            if (op.payload && Object.keys(op.payload).length > 0) {
-              const updated = await updateBook(op.isbn, op.payload)
-              await upsertRemoteBook(updated, {
-                preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
-              })
-            } else {
-              await upsertRemoteBook(existing, {
-                preserveLocal: await isbnHasOtherOps(op.isbn, op.id),
-              })
-            }
-            await removeOutboxOp(op.id)
-            lastError = undefined
-            continue
-          } catch (inner) {
-            lastError =
-              inner instanceof Error ? inner.message : "Could not merge existing book."
-            break
-          }
-        }
-
-        if (
-          error instanceof ApiError &&
-          (error.status === 404 || error.status === 409) &&
-          op.type === "delete"
-        ) {
-          await deleteBookRecord(op.isbn)
+        return "done"
+      } catch (inner) {
+        if (isTerminalClientError(inner)) {
+          lastError = inner.message
           await removeOutboxOp(op.id)
-          continue
+          return "done"
         }
-
-        if (
-          error instanceof ApiError &&
-          error.status >= 400 &&
-          error.status < 500 &&
-          error.status !== 429
-        ) {
-          lastError = error.message
-          await removeOutboxOp(op.id)
-          continue
-        }
-
-        lastError = error instanceof Error ? error.message : "Sync failed."
-        break
+        lastError =
+          inner instanceof Error ? inner.message : "Could not merge existing book."
+        return "retry"
       }
     }
 
-    if (isBrowserOnline()) {
-      await setLastSyncedAt(Date.now())
+    if (
+      error instanceof ApiError &&
+      (error.status === 404 || error.status === 409) &&
+      op.type === "delete"
+    ) {
+      await deleteBookRecord(op.isbn)
+      await removeOutboxOp(op.id)
+      return "done"
     }
-  } finally {
-    draining = false
-    syncing = false
-    notifyLibrary()
+
+    if (isTerminalClientError(error)) {
+      lastError = error.message
+      await removeOutboxOp(op.id)
+      return "done"
+    }
+
+    lastError = error instanceof Error ? error.message : "Sync failed."
+    return "retry"
   }
+}
+
+const isbnAttempt = new Map<string, number>()
+
+function schedule(op: OutboxOp): Promise<void> | null {
+  if (scheduled.has(op.id)) return null
+  scheduled.add(op.id)
+  const attempt = isbnAttempt.get(op.isbn) ?? 0
+  const prev = tails.get(op.isbn) ?? Promise.resolve()
+  const run = prev.then(async () => {
+    try {
+      if ((isbnAttempt.get(op.isbn) ?? 0) !== attempt) return
+      const still = (await getOutbox()).some((item) => item.id === op.id)
+      if (!still) return
+      const outcome = await applyOutboxOp(op)
+      if (outcome === "retry") isbnAttempt.set(op.isbn, attempt + 1)
+    } finally {
+      scheduled.delete(op.id)
+    }
+  })
+  tails.set(
+    op.isbn,
+    run.then(
+      () => undefined,
+      () => undefined
+    )
+  )
+  return run
+}
+
+async function sendPending(): Promise<void> {
+  if (!isBrowserOnline()) return
+  beginWork()
+  try {
+    const ops = await getOutbox()
+    const waits: Promise<void>[] = []
+    for (const op of ops) {
+      const pending = schedule(op)
+      if (pending) waits.push(pending)
+    }
+    await Promise.all(waits)
+    if (isBrowserOnline()) await setLastSyncedAt(Date.now())
+  } finally {
+    endWork()
+  }
+}
+
+async function drainOutboxOnce(): Promise<void> {
+  const leader = localDrains === 0
+  localDrains += 1
+  try {
+    if (leader) await withOriginLock("maktaba-drain", sendPending)
+    else await sendPending()
+  } finally {
+    localDrains -= 1
+  }
+}
+
+export function drainOutbox(): Promise<void> {
+  return drainOutboxOnce()
 }
 
 export async function hydrateLibrary(): Promise<void> {
   notifyLibrary()
-  await pullRemoteCatalog()
-  await drainOutbox()
+  await Promise.all([drainOutbox(), pullRemoteCatalog()])
 }
 
 export function startOfflineSync() {

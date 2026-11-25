@@ -235,7 +235,7 @@ export function IsbnBarcodeScanner({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative aspect-[3/4] max-h-[50dvh] w-full overflow-hidden rounded-xl bg-black">
+      <div className="relative aspect-[3/4] max-h-[min(60dvh,28rem)] w-full overflow-hidden rounded-xl bg-black">
         <video
           ref={videoRef}
           className="size-full object-cover"
@@ -259,7 +259,12 @@ export function IsbnBarcodeScanner({
       <p className="text-sm text-muted-foreground">
         Keep pointing at ISBN barcodes. Tap Done when you are finished.
       </p>
-      <Button type="button" variant="outline" onClick={onCancel}>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-touch w-full md:h-8 md:w-auto"
+        onClick={onCancel}
+      >
         Done
       </Button>
     </div>

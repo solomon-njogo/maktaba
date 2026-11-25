@@ -258,41 +258,118 @@ async function findActiveRecordByIsbn(
   )
 }
 
+const CATALOG_FRESH_MS = 1000
+
+let catalogCache: { at: number; books: FormattedBookResponse[] } | null = null
+let catalogFlight: Promise<FormattedBookResponse[]> | null = null
+let catalogLoaded = false
+let catalogEpoch = 0
+let deletedByIsbn = new Map<string, string>()
+
+function sortCatalog(books: FormattedBookResponse[]) {
+  return [...books].sort((a, b) =>
+    (b.DateAdded ?? "").localeCompare(a.DateAdded ?? "")
+  )
+}
+
+function rememberBook(book: FormattedBookResponse) {
+  catalogEpoch += 1
+  if (book.ISBN) deletedByIsbn.delete(book.ISBN)
+  if (!catalogCache) return
+  const books = catalogCache.books.filter(
+    (item) => item.ISBN !== book.ISBN && item.id !== book.id
+  )
+  if (book.inLibrary) books.push(book)
+  catalogCache = { at: Date.now(), books: sortCatalog(books) }
+}
+
+function forgetBook(isbn: string, recordId?: string) {
+  catalogEpoch += 1
+  if (recordId) deletedByIsbn.set(isbn, recordId)
+  if (!catalogCache) return
+  catalogCache = {
+    at: Date.now(),
+    books: catalogCache.books.filter(
+      (item) => item.ISBN !== isbn && item.id !== recordId
+    ),
+  }
+}
+
+async function fetchCatalog(): Promise<{
+  books: FormattedBookResponse[]
+  deleted: Map<string, string>
+}> {
+  const records = await getAirtableBase()(TABLE_NAME).select().all()
+  const deleted = new Map<string, string>()
+  const books: FormattedBookResponse[] = []
+  for (const record of records) {
+    const book = formatRecord(record, true)
+    if (isDeleted(firstNamedField(record, DELETED_AT_FIELDS))) {
+      if (book.ISBN) deleted.set(book.ISBN, record.id)
+      continue
+    }
+    books.push(book)
+  }
+  return { books: sortCatalog(books), deleted }
+}
+
+async function refreshCatalog(): Promise<FormattedBookResponse[]> {
+  if (!catalogFlight) {
+    const epoch = catalogEpoch
+    catalogFlight = fetchCatalog()
+      .then(({ books, deleted }) => {
+        if (epoch === catalogEpoch) {
+          deletedByIsbn = deleted
+          catalogLoaded = true
+          catalogCache = { at: Date.now(), books }
+        }
+        return catalogCache?.books ?? books
+      })
+      .finally(() => {
+        catalogFlight = null
+      })
+  }
+  return catalogFlight
+}
+
+async function readCatalog(): Promise<FormattedBookResponse[]> {
+  if (catalogCache) {
+    if (Date.now() - catalogCache.at >= CATALOG_FRESH_MS) {
+      void refreshCatalog().catch(() => {})
+    }
+    return catalogCache.books
+  }
+  return refreshCatalog()
+}
+
+void refreshCatalog().catch(() => {})
+
 export async function listBooks(filters?: {
   status?: string
   borrowed?: string
 }): Promise<FormattedBookResponse[]> {
-  const clauses: string[] = []
-
-  if (filters?.status) {
-    if (!VALID_STATUSES.includes(filters.status as BookStatus)) {
-      throw new HttpError(400, "Invalid status filter.")
-    }
-    clauses.push(`{Status} = '${escapeAirtableString(filters.status)}'`)
+  let borrowed: "Yes" | "No" | undefined
+  if (filters?.status && !VALID_STATUSES.includes(filters.status as BookStatus)) {
+    throw new HttpError(400, "Invalid status filter.")
   }
-
   if (filters?.borrowed) {
-    const borrowed =
+    borrowed =
       filters.borrowed === "Yes" || filters.borrowed === "true"
         ? "Yes"
         : filters.borrowed === "No" || filters.borrowed === "false"
           ? "No"
-          : null
+          : undefined
     if (!borrowed) {
       throw new HttpError(400, "Invalid borrowed filter. Use Yes or No.")
     }
-    clauses.push(`{Borrowed} = '${borrowed}'`)
   }
 
-  const query = getAirtableBase()(TABLE_NAME).select(
-    clauses.length > 0 ? { filterByFormula: `AND(${clauses.join(",")})` } : {}
-  )
-  const records = await query.all()
-
-  return records
-    .filter((record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS)))
-    .map((record) => formatRecord(record, true))
-    .sort((a, b) => (b.DateAdded ?? "").localeCompare(a.DateAdded ?? ""))
+  const books = await readCatalog()
+  return books.filter((book) => {
+    if (filters?.status && book.Status !== filters.status) return false
+    if (borrowed && (book.Borrowed ?? "No") !== borrowed) return false
+    return true
+  })
 }
 
 type CatalogLookup = {
@@ -521,6 +598,21 @@ export async function createBook(
 
   const manual = Boolean(extras?.Title?.trim())
 
+  if (catalogLoaded) {
+    const active = catalogCache?.books.find((book) => book.ISBN === cleanIsbn)
+    if (active) {
+      throw new HttpError(
+        409,
+        `Book with ISBN ${cleanIsbn} is already in the library.`
+      )
+    }
+    const deletedId = deletedByIsbn.get(cleanIsbn)
+    if (deletedId) {
+      return restoreDeleted(cleanIsbn, deletedId, manual, extras)
+    }
+    return insertBook(cleanIsbn, manual, extras)
+  }
+
   const records = await findRecordsByIsbn(cleanIsbn)
   const active = records.find(
     (record) => !isDeleted(firstNamedField(record, DELETED_AT_FIELDS))
@@ -536,40 +628,73 @@ export async function createBook(
     isDeleted(firstNamedField(record, DELETED_AT_FIELDS))
   )
   if (deleted) {
-    const restoredFields: FieldSet = manual
-      ? { ...fieldsFromManual(cleanIsbn, extras ?? {}) }
-      : {
-          Status: "TBR",
-          Borrowed: "No",
-        }
-    setAliased(restoredFields, DELETED_AT_FIELDS, null)
-    if (!manual) clearBorrowedPerson(restoredFields)
-    const restored = await applyRecordFields(restoredFields, deleted.id)
-    return formatRecord(restored, true)
+    return restoreDeleted(cleanIsbn, deleted.id, manual, extras)
   }
 
+  return insertBook(cleanIsbn, manual, extras)
+}
+
+async function restoreDeleted(
+  isbn: string,
+  recordId: string,
+  manual: boolean,
+  extras?: BookCreatePayload
+) {
+  const restoredFields: FieldSet = manual
+    ? { ...fieldsFromManual(isbn, extras ?? {}) }
+    : {
+        Status: "TBR",
+        Borrowed: "No",
+      }
+  setAliased(restoredFields, DELETED_AT_FIELDS, null)
+  if (!manual) clearBorrowedPerson(restoredFields)
+  const restored = await applyRecordFields(restoredFields, recordId)
+  const book = formatRecord(restored, true)
+  rememberBook(book)
+  return book
+}
+
+async function insertBook(
+  isbn: string,
+  manual: boolean,
+  extras?: BookCreatePayload
+) {
   if (manual) {
-    const created = await applyRecordFields(fieldsFromManual(cleanIsbn, extras ?? {}))
-    return formatRecord(created, true)
+    const created = await applyRecordFields(fieldsFromManual(isbn, extras ?? {}))
+    const book = formatRecord(created, true)
+    rememberBook(book)
+    return book
   }
 
-  const preview = await lookupIsbn(cleanIsbn)
-  const created = await applyRecordFields(fieldsFromPreview(preview, cleanIsbn))
-  return formatRecord(created, true)
+  const preview = await fetchBookFromCatalogs(isbn)
+  const created = await applyRecordFields(fieldsFromPreview(preview, isbn))
+  const book = formatRecord(created, true)
+  rememberBook(book)
+  return book
+}
+
+async function recordForWrite(
+  isbn: string,
+  recordId?: string
+): Promise<AirtableRecord | { id: string }> {
+  const id =
+    recordId?.trim() ||
+    catalogCache?.books.find((book) => book.ISBN === isbn)?.id
+  if (id) return { id }
+  const existing = await findActiveRecordByIsbn(isbn)
+  if (!existing) {
+    throw new HttpError(404, `Book with ISBN ${isbn} is not in the library.`)
+  }
+  return existing
 }
 
 export async function updateBook(
   isbn: string,
-  patch: BookUpdatePayload
+  patch: BookUpdatePayload,
+  recordId?: string
 ): Promise<FormattedBookResponse> {
   const cleanIsbn = cleanIsbnString(isbn)
-  const existing = await findActiveRecordByIsbn(cleanIsbn)
-  if (!existing) {
-    throw new HttpError(
-      404,
-      `Book with ISBN ${cleanIsbn} is not in the library.`
-    )
-  }
+  const existing = await recordForWrite(cleanIsbn, recordId)
 
   const fields: FieldSet = {}
 
@@ -618,7 +743,9 @@ export async function updateBook(
   }
 
   const updated = await applyRecordFields(fields, existing.id)
-  return formatRecord(updated, true)
+  const book = formatRecord(updated, true)
+  rememberBook(book)
+  return book
 }
 
 function airtableErrorTexts(error: unknown): string[] {
@@ -691,21 +818,18 @@ async function applyRecordFields(fields: FieldSet, existingId?: string) {
 }
 
 export async function softDeleteBook(
-  isbn: string
+  isbn: string,
+  recordId?: string
 ): Promise<FormattedBookResponse> {
   const cleanIsbn = cleanIsbnString(isbn)
-  const existing = await findActiveRecordByIsbn(cleanIsbn)
-  if (!existing) {
-    throw new HttpError(
-      404,
-      `Book with ISBN ${cleanIsbn} is not in the library.`
-    )
-  }
+  const existing = await recordForWrite(cleanIsbn, recordId)
 
   const fields: FieldSet = {}
   setAliased(fields, DELETED_AT_FIELDS, new Date().toISOString())
   const updated = await applyRecordFields(fields, existing.id)
-  return formatRecord(updated, false)
+  const book = formatRecord(updated, false)
+  forgetBook(cleanIsbn, existing.id)
+  return book
 }
 
 export function requireIsbn(raw: string | undefined): string {
