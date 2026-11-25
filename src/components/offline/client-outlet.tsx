@@ -98,7 +98,6 @@ function LibraryRoute({ path }: { path: string }) {
     <LibraryView
       title="Library"
       description="Every book in the catalog."
-      showTotal
     />
   )
 }

@@ -6,6 +6,26 @@ export const destinations = [
   { href: "/library", label: "Library" },
 ] as const
 
+/** Shelf segments under Library. Paths are already routed and precached. */
+export const libraryShelves = [
+  { href: "/library", label: "All" },
+  { href: "/reading", label: "Reading" },
+  { href: "/tbr", label: "TBR" },
+  { href: "/done", label: "Done" },
+  { href: "/to-buy", label: "To-Buy" },
+  { href: "/borrowed", label: "Borrowed" },
+] as const
+
+export type LibraryShelfHref = (typeof libraryShelves)[number]["href"]
+
+/** Home summary tiles → shelf routes. */
+export const countDestinations = [
+  { key: "shelf", label: "Shelf", href: "/library" },
+  { key: "borrowed", label: "Borrowed", href: "/borrowed" },
+  { key: "tbr", label: "TBR", href: "/tbr" },
+  { key: "toBuy", label: "To-Buy", href: "/to-buy" },
+] as const
+
 export type Screen =
   | "home"
   | "add"
@@ -42,6 +62,14 @@ export function screenForPath(pathname: string): Screen {
   if (path === "/pending") return "pending"
   if (/^\/books\/[^/]+$/.test(path)) return "book"
   return "not-found"
+}
+
+export function libraryShelfForPath(pathname: string): LibraryShelfHref {
+  const path = normalizePath(pathname)
+  if (LIBRARY_PATHS.has(path) && path !== "/library") {
+    return path as LibraryShelfHref
+  }
+  return "/library"
 }
 
 export function showsPhoneBar(pathname: string) {

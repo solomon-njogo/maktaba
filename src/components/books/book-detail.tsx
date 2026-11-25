@@ -85,9 +85,7 @@ function displayDate(value?: string) {
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-1 gap-1 border-b border-border/70 py-3 last:border-b-0 sm:grid-cols-[8.5rem_1fr] sm:gap-4">
-      <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {label}
-      </dt>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-sm wrap-break-word">{value}</dd>
     </div>
   )

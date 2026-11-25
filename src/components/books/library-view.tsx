@@ -6,15 +6,10 @@ import { SearchIcon, XIcon } from "lucide-react"
 import type { BookEmptyVariant } from "@/components/books/book-empty"
 import { BookEmpty } from "@/components/books/book-empty"
 import { LibraryBookCard } from "@/components/books/library-book-card"
+import { LibraryShelfFilters } from "@/components/books/library-shelf-filters"
 import { useLibrary } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
-import { AppLink } from "@/components/offline/app-link"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { useAppPath } from "@/components/offline/app-path"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   InputGroup,
@@ -22,7 +17,6 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import type { ListBooksFilters } from "@/lib/api/books"
 import type { LocalBook } from "@/lib/offline/types"
@@ -33,7 +27,17 @@ import {
 } from "@/lib/shelf"
 import { cn } from "@/lib/utils"
 
-function bookMatchesQuery(book: LocalBook, query: string) {
+function bookMatchesQuery(
+  book: {
+    Title: string
+    Author: string
+    ISBN?: string
+    Genre?: string
+    BorrowedBy?: string
+    Status: string
+  },
+  query: string
+) {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) return true
 
@@ -52,40 +56,17 @@ function bookMatchesQuery(book: LocalBook, query: string) {
   return terms.every((term) => haystack.includes(term))
 }
 
-function LibraryTotalCard({
-  count,
-  ready,
-}: {
-  count: number
-  ready: boolean
-}) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardDescription>Total books</CardDescription>
-        {ready ? (
-          <CardTitle className="text-3xl tabular-nums">
-            {count.toLocaleString()}
-          </CardTitle>
-        ) : (
-          <Skeleton className="h-9 w-16" />
-        )}
-      </CardHeader>
-    </Card>
-  )
-}
-
 export function LibraryView({
   title,
   description,
   filters,
   emptyVariant = "library",
-  showTotal = false,
 }: {
   title: string
   description: string
   filters?: ListBooksFilters
   emptyVariant?: BookEmptyVariant
+  /** @deprecated Count is shown in the subtitle. */
   showTotal?: boolean
 }) {
   const { books: allBooks } = useLibrary()
@@ -99,13 +80,22 @@ export function LibraryView({
     [books, query]
   )
   const searching = query.trim().length > 0
+  const countLabel = ready
+    ? `${books.length.toLocaleString()} ${books.length === 1 ? "book" : "books"}`
+    : null
 
   return (
     <PageShell>
-      <header className="flex flex-col gap-4">
+      <header className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl sm:text-3xl">{title}</h1>
           <p className="text-sm text-muted-foreground sm:text-base">
+            {countLabel ? (
+              <>
+                <span className="tabular-nums text-foreground">{countLabel}</span>
+                <span aria-hidden="true"> · </span>
+              </>
+            ) : null}
             {description}
           </p>
         </div>
@@ -191,7 +181,14 @@ export function LibraryView({
       ) : books.length === 0 ? (
         <BookEmpty variant={emptyVariant} />
       ) : visibleBooks.length === 0 ? (
-        <BookEmpty variant="search" />
+        <BookEmpty
+          variant="search"
+          action={{
+            kind: "button",
+            label: "Clear search",
+            onClick: () => setQuery(""),
+          }}
+        />
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {visibleBooks.map((book) => (
