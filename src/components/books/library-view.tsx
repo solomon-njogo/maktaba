@@ -108,7 +108,9 @@ export function LibraryView({
                 placeholder="Search title, author, ISBN…"
                 autoComplete="off"
                 enterKeyHint="search"
-                className="h-full"
+                autoCorrect="off"
+                spellCheck={false}
+                className="h-full text-base md:text-sm"
               />
               {searching ? (
                 <InputGroupAddon align="inline-end">

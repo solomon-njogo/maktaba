@@ -75,30 +75,53 @@ function recordsUrl(tableName: string, recordId?: string) {
   return `https://api.airtable.com/v0/${encodeURIComponent(baseId)}/${path}`
 }
 
+const WRITE_BUDGET_MS = 2500
+const READ_BUDGET_MS = 8000
+
 async function airtableFetch(
   url: string,
   init: RequestInit,
-  attempt = 0
+  attempt = 0,
+  started = Date.now(),
+  budgetMs = WRITE_BUDGET_MS
 ): Promise<unknown> {
-  const { apiKey } = credentials()
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-    cache: "no-store",
-  })
+  const remaining = () => budgetMs - (Date.now() - started)
+  if (remaining() <= 0) {
+    throw new AirtableRequestError(504, "Airtable took too long.")
+  }
 
-  if (response.status === 429 && attempt < 4) {
+  const { apiKey } = credentials()
+  let response: Response
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(remaining()),
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new AirtableRequestError(504, "Airtable took too long.")
+    }
+    throw error
+  }
+
+  if (response.status === 429 && attempt < 1) {
     const retryAfter = Number(response.headers.get("Retry-After"))
-    const waitMs = Number.isFinite(retryAfter)
-      ? retryAfter * 1000
-      : 200 * 2 ** attempt
-    await new Promise((resolve) => setTimeout(resolve, waitMs))
-    return airtableFetch(url, init, attempt + 1)
+    const suggested = Number.isFinite(retryAfter) ? retryAfter * 1000 : 100
+    const waitMs = Math.min(suggested, 100, remaining() - 50)
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+      return airtableFetch(url, init, attempt + 1, started, budgetMs)
+    }
   }
 
   const text = await response.text()
@@ -143,9 +166,16 @@ async function listPage(
   if (options.maxRecords) {
     url.searchParams.set("maxRecords", String(options.maxRecords))
   }
+  url.searchParams.set("pageSize", "100")
   if (offset) url.searchParams.set("offset", offset)
 
-  const body = (await airtableFetch(url.toString(), { method: "GET" })) as {
+  const body = (await airtableFetch(
+    url.toString(),
+    { method: "GET" },
+    0,
+    Date.now(),
+    READ_BUDGET_MS
+  )) as {
     records?: AirtableRecordJson[]
     offset?: string
   }

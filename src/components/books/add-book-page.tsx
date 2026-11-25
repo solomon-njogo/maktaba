@@ -12,7 +12,7 @@ import {
 } from "@/components/books/isbn-barcode-scanner"
 import { useLibrary } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import {
   Field,
   FieldGroup,
@@ -32,7 +32,6 @@ import {
 import { createLocalBook } from "@/lib/offline/books-repository"
 import { navigateApp } from "@/lib/offline/navigation"
 import type { BookStatus, FormattedBookResponse } from "@/types/books"
-import { cn } from "@/lib/utils"
 
 const STATUSES: BookStatus[] = ["TBR", "Reading", "Done", "To-Buy"]
 const LOOKUP_DEBOUNCE_MS = 400
@@ -289,6 +288,15 @@ export function AddBookPage() {
     resetForm()
   }
 
+  useEffect(() => {
+    if (!canScan || scanning) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("scan") !== "1") return
+    setAdded(null)
+    setScanning(true)
+    navigateApp("/add")
+  }, [canScan, scanning])
+
   async function handleSavePreview() {
     if (!singleRow?.book?.ISBN && !singleIsbn) return
     setSaving(true)
@@ -479,8 +487,27 @@ export function AddBookPage() {
     )
   }
 
+  const isBulkAction = isBulk || (bulkMode && displayIsbns.length > 0)
+  const hasSaveActions =
+    !scanning &&
+    (isBulkAction ||
+      manualOpen ||
+      (singleRow?.status === "found" && !alreadyInLibrary) ||
+      Boolean(
+        singleIsbn &&
+          !alreadyInLibrary &&
+          singleRow?.status !== "pending" &&
+          !lookingUp
+      ))
+
   return (
-    <PageShell>
+    <PageShell
+      className={
+        hasSaveActions
+          ? "pb-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom)+10rem)] md:pb-24"
+          : undefined
+      }
+    >
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl sm:text-3xl">Add</h1>
         <p className="text-sm text-muted-foreground sm:text-base">
@@ -497,11 +524,11 @@ export function AddBookPage() {
           <Button
             type="button"
             size="lg"
-            className="h-touch w-full md:h-10"
+            className="h-touch w-full md:h-10 md:w-auto md:self-start"
             onClick={() => setScanning(true)}
           >
             <ScanBarcode data-icon="inline-start" />
-            Scan barcode
+            {bulkMode ? "Scan barcodes" : "Scan barcode"}
           </Button>
         ) : null}
 
@@ -564,6 +591,7 @@ export function AddBookPage() {
                   onChange={(event) => setRaw(event.target.value)}
                   placeholder={"9780143127741\n9780143127742"}
                   autoComplete="off"
+                  enterKeyHint="done"
                   rows={4}
                 />
               ) : (
@@ -580,6 +608,7 @@ export function AddBookPage() {
                   }}
                   placeholder="9780143127741"
                   autoComplete="off"
+                  enterKeyHint="done"
                   inputMode="text"
                   className="h-touch md:h-8"
                 />
@@ -726,67 +755,61 @@ export function AddBookPage() {
         )}
       </div>
 
-      {scanning ? null : (
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          {isBulk || (bulkMode && displayIsbns.length > 0) ? (
-            <Button
-              className="h-touch w-full sm:w-auto md:h-8"
-              onClick={() => void handleAddAll()}
-              disabled={saving || addableIsbns.length === 0}
-            >
-              {saving
-                ? "Saving…"
-                : addableIsbns.length > 0
-                  ? `Add all (${addableIsbns.length})`
-                  : "Add all"}
-            </Button>
-          ) : manualOpen ? (
-            <>
+      {hasSaveActions ? (
+        <div className="fixed inset-x-0 z-20 border-t bg-background/95 px-page-x py-3 backdrop-blur-sm bottom-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom))] md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+          <div className="mx-auto flex w-full max-w-page flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&>button]:h-touch [&>button]:w-full sm:[&>button]:w-auto md:[&>button]:h-8">
+            {isBulkAction ? (
               <Button
-                type="submit"
-                form="manual-add-form"
-                className="h-touch w-full sm:w-auto md:h-8"
-                disabled={!singleIsbn || !title.trim() || alreadyInLibrary || saving}
+                onClick={() => void handleAddAll()}
+                disabled={saving || addableIsbns.length === 0}
+              >
+                {saving
+                  ? "Saving…"
+                  : addableIsbns.length > 0
+                    ? `Add all (${addableIsbns.length})`
+                    : "Add all"}
+              </Button>
+            ) : manualOpen ? (
+              <>
+                <Button
+                  type="submit"
+                  form="manual-add-form"
+                  disabled={
+                    !singleIsbn || !title.trim() || alreadyInLibrary || saving
+                  }
+                >
+                  {saving ? "Saving…" : "Save to library"}
+                </Button>
+                {singleRow?.status === "error" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={!singleIsbn || alreadyInLibrary || saving}
+                    onClick={() => void handleSaveIsbnOnly()}
+                  >
+                    Save ISBN only
+                  </Button>
+                ) : null}
+              </>
+            ) : singleRow?.status === "found" && !alreadyInLibrary ? (
+              <Button
+                onClick={() => void handleSavePreview()}
+                disabled={saving}
               >
                 {saving ? "Saving…" : "Save to library"}
               </Button>
-              {singleRow?.status === "error" ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-touch w-full sm:w-auto md:h-8"
-                  disabled={!singleIsbn || alreadyInLibrary || saving}
-                  onClick={() => void handleSaveIsbnOnly()}
-                >
-                  Save ISBN only
-                </Button>
-              ) : null}
-            </>
-          ) : singleRow?.status === "found" && !alreadyInLibrary ? (
-            <Button
-              className="h-touch w-full sm:w-auto md:h-8"
-              onClick={() => void handleSavePreview()}
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Save to library"}
-            </Button>
-          ) : singleIsbn &&
-            !alreadyInLibrary &&
-            singleRow?.status !== "pending" &&
-            !lookingUp ? (
-            <Button
-              className={cn(
-                buttonVariants({ variant: "outline" }),
-                "h-touch w-full sm:w-auto md:h-8"
-              )}
-              onClick={() => void handleSaveIsbnOnly()}
-              disabled={saving}
-            >
-              {saving ? "Saving…" : "Save ISBN only"}
-            </Button>
-          ) : null}
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => void handleSaveIsbnOnly()}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save ISBN only"}
+              </Button>
+            )}
+          </div>
         </div>
-      )}
+      ) : null}
     </PageShell>
   )
 }

@@ -5,6 +5,7 @@ import { cleanIsbnString } from "@/lib/isbn"
 import {
   addOutboxOp,
   clearOutbox,
+  commitBookChanges,
   deleteBookRecord,
   getAllBooks,
   getBookByIsbn,
@@ -173,14 +174,19 @@ export async function removeLocalBook(isbnInput: string): Promise<LocalBook> {
 }
 
 export async function replaceRemoteCatalog(
-  remote: FormattedBookResponse[]
+  remote: FormattedBookResponse[],
+  alsoPending?: Iterable<string>
 ): Promise<void> {
   const pending = await pendingIsbnSet()
+  if (alsoPending) {
+    for (const isbn of alsoPending) pending.add(isbn)
+  }
   const local = await getAllBooks()
   const localByIsbn = new Map(
     local.filter((book) => book.ISBN).map((book) => [book.ISBN as string, book])
   )
   const remoteIsbns = new Set<string>()
+  const puts: LocalBook[] = []
 
   for (const book of remote) {
     const isbn = book.ISBN ? cleanIsbnString(book.ISBN) : ""
@@ -188,7 +194,7 @@ export async function replaceRemoteCatalog(
     remoteIsbns.add(isbn)
     if (pending.has(isbn)) continue
     const previous = localByIsbn.get(isbn)
-    await putBook({
+    puts.push({
       ...book,
       ISBN: isbn,
       pending: false,
@@ -198,13 +204,15 @@ export async function replaceRemoteCatalog(
     })
   }
 
+  const deletes: string[] = []
   for (const book of local) {
     const isbn = book.ISBN
     if (!isbn || pending.has(isbn) || remoteIsbns.has(isbn)) continue
     if (book.deleted) continue
-    await deleteBookRecord(isbn)
+    deletes.push(isbn)
   }
 
+  await commitBookChanges(puts, deletes)
   notifyLibrary()
 }
 

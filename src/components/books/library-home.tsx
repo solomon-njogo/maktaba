@@ -130,9 +130,9 @@ export function LibraryHome() {
       ) : (
         <>
           <section aria-label="Shelf summary">
-            <dl className="grid grid-cols-2 overflow-hidden rounded-2xl bg-summary text-summary-foreground sm:grid-cols-4">
+            <ul className="grid grid-cols-2 overflow-hidden rounded-2xl bg-summary text-summary-foreground sm:grid-cols-4">
               {countDestinations.map((item, index) => (
-                <div
+                <li
                   key={item.key}
                   className={cn(
                     "min-w-0",
@@ -143,16 +143,18 @@ export function LibraryHome() {
                 >
                   <AppLink
                     href={item.href}
-                    className="block min-w-0 px-3 py-2.5 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none sm:px-4"
+                    className="flex min-h-touch flex-col justify-center px-3 py-2.5 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-summary-foreground/40 focus-visible:ring-inset sm:px-4"
                   >
-                    <dt className="text-xs text-summary-foreground/70">{item.label}</dt>
-                    <dd className="text-sm tabular-nums sm:text-base">
+                    <span className="text-xs text-summary-foreground/70">
+                      {item.label}
+                    </span>
+                    <span className="text-sm tabular-nums sm:text-base">
                       {counts[item.key]}
-                    </dd>
+                    </span>
                   </AppLink>
-                </div>
+                </li>
               ))}
-            </dl>
+            </ul>
           </section>
           <section aria-label="Reading" className="flex flex-col gap-3">
             {reading ? (

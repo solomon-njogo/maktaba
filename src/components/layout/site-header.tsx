@@ -15,10 +15,13 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 pt-[max(0.75rem,var(--spacing-safe-top))] backdrop-blur-sm">
-      <div className="mx-auto flex w-full max-w-page flex-col gap-3 px-page-x py-3">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto flex w-full max-w-page flex-col gap-2 px-page-x py-2.5 md:gap-3 md:py-3">
+        <div className="flex min-h-touch items-center justify-between gap-3 md:min-h-0">
           <div className="min-w-0">
-            <AppLink href="/" className="font-heading text-lg tracking-tight">
+            <AppLink
+              href="/"
+              className="font-heading text-lg tracking-tight"
+            >
               Maktaba
             </AppLink>
             <p className="hidden truncate text-xs text-muted-foreground md:block">
