@@ -73,6 +73,53 @@ export function shelfCounts(books: LocalBook[]): ShelfCounts {
   return counts
 }
 
+export const libraryViews = [
+  { key: "all", label: "All", href: "/library" },
+  { key: "tbr", label: "TBR", href: "/tbr" },
+  { key: "reading", label: "Reading", href: "/reading" },
+  { key: "done", label: "Done", href: "/done" },
+  { key: "toBuy", label: "To-Buy", href: "/to-buy" },
+  { key: "borrowed", label: "Borrowed", href: "/borrowed" },
+] as const
+
+export type LibraryViewKey = (typeof libraryViews)[number]["key"]
+export type LibraryViewCounts = Record<LibraryViewKey, number>
+
+export function libraryViewCounts(books: LocalBook[]): LibraryViewCounts {
+  const counts: LibraryViewCounts = {
+    all: 0,
+    tbr: 0,
+    reading: 0,
+    done: 0,
+    toBuy: 0,
+    borrowed: 0,
+  }
+
+  for (const book of books) {
+    if (book.deleted) continue
+    counts.all += 1
+    if (book.Status === "TBR") counts.tbr += 1
+    else if (book.Status === "Reading") counts.reading += 1
+    else if (book.Status === "Done") counts.done += 1
+    else if (book.Status === "To-Buy") counts.toBuy += 1
+    if (book.Borrowed === "Yes") counts.borrowed += 1
+  }
+
+  return counts
+}
+
+export function libraryViewForFilters(filters?: {
+  status?: string
+  borrowed?: string
+}): LibraryViewKey {
+  if (filters?.borrowed === "Yes") return "borrowed"
+  if (filters?.status === "TBR") return "tbr"
+  if (filters?.status === "Reading") return "reading"
+  if (filters?.status === "Done") return "done"
+  if (filters?.status === "To-Buy") return "toBuy"
+  return "all"
+}
+
 function calendarDay(value?: string) {
   return value?.slice(0, 10) ?? ""
 }

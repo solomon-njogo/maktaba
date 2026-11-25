@@ -27,14 +27,20 @@ type BookCardProps = {
   className?: string
 }
 
-function Cover({ coverUrl }: { coverUrl?: string }) {
+export function BookCover({
+  coverUrl,
+  sizes = "(max-width: 640px) 80px, 96px",
+}: {
+  coverUrl?: string
+  sizes?: string
+}) {
   if (coverUrl) {
     return (
       <Image
         src={coverUrl}
         alt=""
         fill
-        sizes="(max-width: 640px) 80px, 96px"
+        sizes={sizes}
         className="object-cover"
         unoptimized
       />
@@ -82,7 +88,7 @@ export function BookCard({ book, loading = false, className }: BookCardProps) {
       <CardContent>
         <div className="flex flex-row items-start gap-3 sm:gap-4">
           <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 sm:w-24">
-            <Cover coverUrl={book.coverUrl} />
+            <BookCover coverUrl={book.coverUrl} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <CardHeader className="px-0">

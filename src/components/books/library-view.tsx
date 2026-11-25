@@ -8,6 +8,7 @@ import { BookEmpty } from "@/components/books/book-empty"
 import { LibraryBookCard } from "@/components/books/library-book-card"
 import { useLibrary } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
+import { AppLink } from "@/components/offline/app-link"
 import {
   Card,
   CardDescription,
@@ -25,6 +26,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import type { ListBooksFilters } from "@/lib/api/books"
 import type { LocalBook } from "@/lib/offline/types"
+import {
+  libraryViewCounts,
+  libraryViewForFilters,
+  libraryViews,
+} from "@/lib/shelf"
+import { cn } from "@/lib/utils"
 
 function bookMatchesQuery(book: LocalBook, query: string) {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -81,9 +88,12 @@ export function LibraryView({
   emptyVariant?: BookEmptyVariant
   showTotal?: boolean
 }) {
+  const { books: allBooks } = useLibrary()
   const { books, ready } = useLibrary(filters)
   const [query, setQuery] = useState("")
 
+  const counts = useMemo(() => libraryViewCounts(allBooks), [allBooks])
+  const activeView = libraryViewForFilters(filters)
   const visibleBooks = useMemo(
     () => books.filter((book) => bookMatchesQuery(book, query)),
     [books, query]
@@ -102,6 +112,41 @@ export function LibraryView({
         {showTotal ? (
           <LibraryTotalCard count={books.length} ready={ready} />
         ) : null}
+        <nav
+          aria-label="Filter library by status"
+          className="-mx-page-x flex gap-1.5 overflow-x-auto px-page-x py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+        >
+          {libraryViews.map((view) => {
+            const active = activeView === view.key
+            return (
+              <AppLink
+                key={view.key}
+                href={view.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-touch shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:h-8 md:min-h-8 md:px-3",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-card/80 text-foreground/80 ring-1 ring-foreground/10 hover:bg-card hover:text-foreground"
+                )}
+              >
+                <span>{view.label}</span>
+                {ready ? (
+                  <span
+                    className={cn(
+                      "tabular-nums",
+                      active
+                        ? "text-primary-foreground/75"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {counts[view.key]}
+                  </span>
+                ) : null}
+              </AppLink>
+            )
+          })}
+        </nav>
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="library-search" className="sr-only">

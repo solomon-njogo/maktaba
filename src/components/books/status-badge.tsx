@@ -4,18 +4,31 @@ import type { FormattedBookResponse } from "@/types/books"
 
 export type BookStatus = NonNullable<FormattedBookResponse["Status"]>
 
-const STATUS_LABEL: Record<BookStatus, string> = {
+export const STATUS_LABEL: Record<BookStatus, string> = {
   TBR: "TBR",
   Reading: "Reading",
   Done: "Done",
   "To-Buy": "To-Buy",
 }
 
-const STATUS_CLASS: Record<BookStatus, string> = {
+export const STATUS_CLASS: Record<BookStatus, string> = {
   TBR: "bg-status-tbr text-status-tbr-foreground",
   Reading: "bg-status-reading text-status-reading-foreground",
   Done: "bg-status-done text-status-done-foreground",
   "To-Buy": "bg-status-to-buy text-status-to-buy-foreground",
+}
+
+export function BorrowedBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      className={cn(
+        "border-transparent bg-status-borrowed text-status-borrowed-foreground",
+        className
+      )}
+    >
+      Borrowed
+    </Badge>
+  )
 }
 
 type StatusBadgeProps = {
@@ -30,11 +43,7 @@ export function StatusBadge({ status, borrowed, className }: StatusBadgeProps) {
       <Badge className={cn("border-transparent", STATUS_CLASS[status])}>
         {STATUS_LABEL[status]}
       </Badge>
-      {borrowed === "Yes" ? (
-        <Badge className="border-transparent bg-status-borrowed text-status-borrowed-foreground">
-          Borrowed
-        </Badge>
-      ) : null}
+      {borrowed === "Yes" ? <BorrowedBadge /> : null}
     </span>
   )
 }
