@@ -33,12 +33,17 @@ export function SiteTabBar() {
               <AppLink
                 href={item.href}
                 className={cn(
-                  "flex min-h-touch flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium",
-                  active ? "text-foreground" : "text-muted-foreground"
+                  "flex min-h-touch flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors",
+                  active
+                    ? "text-foreground"
+                    : "text-muted-foreground active:bg-muted/60"
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon className="size-5" />
+                <Icon
+                  className={cn("size-5", active && "stroke-[2.25px]")}
+                  aria-hidden
+                />
                 {item.label}
               </AppLink>
             </li>

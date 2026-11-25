@@ -15,7 +15,8 @@ function getSnapshot() {
 }
 
 function getServerSnapshot() {
-  return true
+  // Mobile-first: assume a narrow viewport until the client measures.
+  return false
 }
 
 export function useMdUp() {
