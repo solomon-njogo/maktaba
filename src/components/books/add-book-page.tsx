@@ -31,6 +31,7 @@ import {
   parseIsbnList,
 } from "@/lib/isbn"
 import { createLocalBook } from "@/lib/offline/books-repository"
+import { navigateApp } from "@/lib/offline/navigation"
 import type { BookStatus, FormattedBookResponse } from "@/types/books"
 
 const STATUSES: BookStatus[] = ["TBR", "Reading", "Done", "To-Buy"]
@@ -261,6 +262,14 @@ export function AddBookPage() {
     if (isBulk) setManualOpen(false)
   }, [isBulk])
 
+  useEffect(() => {
+    if (!canScan || scanning) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("scan") !== "1") return
+    setScanning(true)
+    navigateApp("/add")
+  }, [canScan, scanning])
+
   async function handleSavePreview() {
     if (!singleRow?.book?.ISBN && !singleIsbn) return
     setSaving(true)
@@ -392,32 +401,41 @@ export function AddBookPage() {
     }
   }
 
+  const showStickyActions = !scanning
+
   return (
-    <PageShell>
+    <PageShell
+      className={
+        showStickyActions
+          ? "pb-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom)+8.5rem)] md:pb-24"
+          : undefined
+      }
+    >
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl sm:text-3xl">Add</h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Scan one or more barcodes, or paste ISBNs (comma or newline).
-          Titles look up automatically when online.
+          {canScan
+            ? "Scan barcodes with the camera, or paste ISBNs. Titles look up when online."
+            : "Paste ISBNs (comma or newline). Titles look up automatically when online."}
         </p>
       </header>
       <div className="flex flex-col gap-4">
+          {canScan && !scanning ? (
+            <Button
+              type="button"
+              size="lg"
+              className="h-touch w-full md:w-auto md:self-start"
+              onClick={() => setScanning(true)}
+            >
+              <ScanBarcode data-icon="inline-start" />
+              Scan barcodes
+            </Button>
+          ) : null}
           <FieldGroup>
             <Field>
-              <div className="flex items-center justify-between gap-2">
-                <FieldLabel htmlFor="isbn">ISBN</FieldLabel>
-                {canScan && !scanning ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setScanning(true)}
-                  >
-                    <ScanBarcode data-icon="inline-start" />
-                    Scan
-                  </Button>
-                ) : null}
-              </div>
+              <FieldLabel htmlFor="isbn">
+                {scanning ? "Scanning" : "ISBN"}
+              </FieldLabel>
               {scanning ? (
                 <IsbnBarcodeScanner
                   onDetect={(isbn) => {
@@ -446,6 +464,7 @@ export function AddBookPage() {
                   onChange={(event) => setRaw(event.target.value)}
                   placeholder={"9780143127741\n9780143127742"}
                   autoComplete="off"
+                  enterKeyHint="done"
                   rows={3}
                 />
               )}
@@ -580,42 +599,49 @@ export function AddBookPage() {
             </>
           )}
         </div>
-        {scanning ? null : (
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
-            {isBulk ? (
-              <Button
-                onClick={() => void handleAddAll()}
-                disabled={saving || addableIsbns.length === 0}
-              >
-                {saving
-                  ? "Saving…"
-                  : addableIsbns.length > 0
-                    ? `Add all (${addableIsbns.length})`
-                    : "Add all"}
-              </Button>
-            ) : manualOpen ? (
-              <Button
-                type="submit"
-                form="manual-add-form"
-                disabled={!singleIsbn || !title.trim() || alreadyInLibrary || saving}
-              >
-                {saving ? "Saving…" : "Save to library"}
-              </Button>
-            ) : singleRow?.status === "found" && !alreadyInLibrary ? (
-              <Button onClick={() => void handleSavePreview()} disabled={saving}>
-                {saving ? "Saving…" : "Save to library"}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => void handleSaveIsbnOnly()}
-                disabled={!singleIsbn || alreadyInLibrary || saving}
-                variant={singleRow?.book ? "default" : "outline"}
-              >
-                {saving ? "Saving…" : "Save ISBN for later lookup"}
-              </Button>
-            )}
+        {showStickyActions ? (
+          <div className="fixed inset-x-0 z-20 border-t bg-background/95 px-page-x py-3 backdrop-blur-sm bottom-[calc(var(--spacing-tab-bar)+var(--spacing-safe-bottom))] md:static md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <div className="mx-auto flex w-full max-w-page flex-col gap-2 sm:flex-row sm:justify-end [&>button]:h-touch [&>button]:w-full sm:[&>button]:h-8 sm:[&>button]:w-auto">
+              {isBulk ? (
+                <Button
+                  onClick={() => void handleAddAll()}
+                  disabled={saving || addableIsbns.length === 0}
+                >
+                  {saving
+                    ? "Saving…"
+                    : addableIsbns.length > 0
+                      ? `Add all (${addableIsbns.length})`
+                      : "Add all"}
+                </Button>
+              ) : manualOpen ? (
+                <Button
+                  type="submit"
+                  form="manual-add-form"
+                  disabled={
+                    !singleIsbn || !title.trim() || alreadyInLibrary || saving
+                  }
+                >
+                  {saving ? "Saving…" : "Save to library"}
+                </Button>
+              ) : singleRow?.status === "found" && !alreadyInLibrary ? (
+                <Button
+                  onClick={() => void handleSavePreview()}
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Save to library"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => void handleSaveIsbnOnly()}
+                  disabled={!singleIsbn || alreadyInLibrary || saving}
+                  variant={singleRow?.book ? "default" : "outline"}
+                >
+                  {saving ? "Saving…" : "Save ISBN for later lookup"}
+                </Button>
+              )}
+            </div>
           </div>
-        )}
+        ) : null}
     </PageShell>
   )
 }

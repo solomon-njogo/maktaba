@@ -53,9 +53,9 @@ Generic tags, counts, and chrome use `Badge` from `components/ui`. Pipeline and 
 | `size-touch` / `min-h-touch` (44px) | Phone chrome and card overflow |
 | `size-control` (2rem) | Compact `md+` controls |
 
-- **Below `md`:** compact header (wordmark, sync), bottom tabs (Library, TBR, Reading, Done, More). Add book is a floating action button at the bottom right, above the tab bar, and opens a bottom sheet. Library home is a cover grid whose columns follow width. Other lists use a horizontal cover + meta row.
-- **From `md`:** full top shelf nav. The same floating action button sits at the bottom right and opens add-book as a right sheet. Library home keeps the same sections with more columns. Other shelves use a two-column list.
-- Overlays (sheet, dialog, dropdown) sit above the tab bar (`z-50` vs `z-30`). Toasts offset above the tab bar on phones.
+- **Below `md`:** compact header (wordmark, sync) and a bottom bar with Home, Add, and Library. A book page hides that bar and uses a sticky Edit/Remove bar instead. Home summary counts open Shelf, Borrowed, TBR, and To-Buy lists. Add leads with Scan when a camera is available; save actions sit in a sticky bar above the tabs.
+- **From `md`:** the same three destinations live in the header (including on a book page), with Design system as a header link. Compact `h-control` controls. Lists use two columns.
+- Overlays (sheet, dialog, dropdown) sit above the tab bar (`z-50` vs `z-30`). Toasts offset above the tab bar on phones. The web app manifest installs as a standalone PWA with Scan and Library shortcuts.
 
 ## Typography
 

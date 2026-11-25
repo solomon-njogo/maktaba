@@ -31,10 +31,10 @@ import {
 import { cn } from "@/lib/utils"
 
 const COUNTS = [
-  { key: "shelf", label: "Shelf" },
-  { key: "borrowed", label: "Borrowed" },
-  { key: "tbr", label: "TBR" },
-  { key: "toBuy", label: "To-Buy" },
+  { key: "shelf", label: "Shelf", href: "/library" },
+  { key: "borrowed", label: "Borrowed", href: "/borrowed" },
+  { key: "tbr", label: "TBR", href: "/tbr" },
+  { key: "toBuy", label: "To-Buy", href: "/to-buy" },
 ] as const
 
 function bookKey(book: LocalBook) {
@@ -136,24 +136,31 @@ export function LibraryHome() {
       ) : (
         <>
           <section aria-label="Shelf summary">
-            <dl className="grid grid-cols-2 overflow-hidden rounded-2xl bg-summary text-summary-foreground sm:grid-cols-4">
+            <ul className="grid grid-cols-2 overflow-hidden rounded-2xl bg-summary text-summary-foreground sm:grid-cols-4">
               {COUNTS.map((item, index) => (
-                <div
+                <li
                   key={item.key}
                   className={cn(
-                    "min-w-0 px-3 py-2.5 sm:px-4",
+                    "min-w-0",
                     index % 2 === 1 && "border-l border-white/15",
                     index >= 2 && "border-t border-white/15 sm:border-t-0",
                     index > 0 && "sm:border-l sm:border-white/15"
                   )}
                 >
-                  <dt className="text-xs text-summary-foreground/70">{item.label}</dt>
-                  <dd className="text-sm tabular-nums sm:text-base">
-                    {counts[item.key]}
-                  </dd>
-                </div>
+                  <AppLink
+                    href={item.href}
+                    className="flex min-h-touch flex-col justify-center px-3 py-2.5 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-summary-foreground/40 focus-visible:ring-inset sm:px-4"
+                  >
+                    <span className="text-xs text-summary-foreground/70">
+                      {item.label}
+                    </span>
+                    <span className="text-sm tabular-nums sm:text-base">
+                      {counts[item.key]}
+                    </span>
+                  </AppLink>
+                </li>
               ))}
-            </dl>
+            </ul>
           </section>
           <section aria-label="Reading" className="flex flex-col gap-3">
             {reading ? (

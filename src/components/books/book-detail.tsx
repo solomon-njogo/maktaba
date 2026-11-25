@@ -184,19 +184,19 @@ export function BookDetail({
   }
 
   return (
-    <PageShell>
+    <PageShell className="pb-[calc(var(--spacing-safe-bottom)+6.5rem)] md:pb-24">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <AppLink
           href="/library"
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
-            "-ml-2"
+            "-ml-2 min-h-touch md:min-h-7"
           )}
         >
           <ArrowLeftIcon />
           Library
         </AppLink>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 md:flex">
           {editing ? (
             <>
               <Button
@@ -437,6 +437,48 @@ export function BookDetail({
                 />
               </dl>
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-page-x py-3 pb-[max(0.75rem,var(--spacing-safe-bottom))] backdrop-blur-sm md:hidden">
+        <div className="mx-auto flex w-full max-w-page gap-2 [&>button]:h-touch [&>button]:flex-1">
+          {editing ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  setForm(formFromBook(book))
+                  setEditing(false)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" form="book-edit-form" disabled={pending}>
+                {pending ? "Saving…" : "Save"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!isbn}
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={!isbn || pending}
+                onClick={() => setDeleteOpen(true)}
+              >
+                Remove
+              </Button>
+            </>
           )}
         </div>
       </div>

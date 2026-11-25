@@ -28,10 +28,19 @@ export const metadata: Metadata = {
   description:
     "A minimal, high-contrast tracker for a personal physical library.",
   applicationName: "Maktaba",
+  formatDetection: {
+    telephone: false,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Maktaba",
+  },
+  icons: {
+    apple: [{ url: "/icon-192x192.png", sizes: "192x192", type: "image/png" }],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 }
 
