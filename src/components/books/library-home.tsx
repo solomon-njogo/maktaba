@@ -185,17 +185,31 @@ function ReadingCard({ book }: { book: LocalBook }) {
           {started ? (
             <p className="text-xs text-muted-foreground">Started {started}</p>
           ) : null}
-          {href ? (
-            <AppLink
-              href={href}
-              className={cn(
-                buttonVariants({ size: "sm" }),
-                "mt-1 h-touch rounded-full bg-white px-4 text-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-white/90 md:h-8"
-              )}
-            >
-              Continue
-            </AppLink>
-          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {book.ISBN ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleMarkDone()}
+                className="h-touch rounded-full px-4 md:h-8"
+              >
+                <CheckIcon data-icon="inline-start" />
+                Mark done
+              </Button>
+            ) : null}
+            {href ? (
+              <AppLink
+                href={href}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-touch rounded-full bg-white px-4 text-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-white/90 md:h-8"
+                )}
+              >
+                Open
+              </AppLink>
+            ) : null}
+          </div>
         </div>
       </div>
     </article>
