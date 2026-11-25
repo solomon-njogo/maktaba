@@ -25,17 +25,11 @@ import { updateLocalBook } from "@/lib/offline/books-repository"
 import type { LocalBook } from "@/lib/offline/types"
 import {
   booksWaitingToStart,
+  countDestinations,
   pickReadingCard,
   shelfCounts,
 } from "@/lib/shelf"
 import { cn } from "@/lib/utils"
-
-const COUNTS = [
-  { key: "shelf", label: "Shelf" },
-  { key: "borrowed", label: "Borrowed" },
-  { key: "tbr", label: "TBR" },
-  { key: "toBuy", label: "To-Buy" },
-] as const
 
 function bookKey(book: LocalBook) {
   return book.ISBN ?? book.id ?? `${book.Title}-${book.Author}`
@@ -137,20 +131,25 @@ export function LibraryHome() {
         <>
           <section aria-label="Shelf summary">
             <dl className="grid grid-cols-2 overflow-hidden rounded-2xl bg-summary text-summary-foreground sm:grid-cols-4">
-              {COUNTS.map((item, index) => (
+              {countDestinations.map((item, index) => (
                 <div
                   key={item.key}
                   className={cn(
-                    "min-w-0 px-3 py-2.5 sm:px-4",
+                    "min-w-0",
                     index % 2 === 1 && "border-l border-white/15",
                     index >= 2 && "border-t border-white/15 sm:border-t-0",
                     index > 0 && "sm:border-l sm:border-white/15"
                   )}
                 >
-                  <dt className="text-xs text-summary-foreground/70">{item.label}</dt>
-                  <dd className="text-sm tabular-nums sm:text-base">
-                    {counts[item.key]}
-                  </dd>
+                  <AppLink
+                    href={item.href}
+                    className="block min-w-0 px-3 py-2.5 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none sm:px-4"
+                  >
+                    <dt className="text-xs text-summary-foreground/70">{item.label}</dt>
+                    <dd className="text-sm tabular-nums sm:text-base">
+                      {counts[item.key]}
+                    </dd>
+                  </AppLink>
                 </div>
               ))}
             </dl>
@@ -177,6 +176,7 @@ function ReadingCard({ book }: { book: LocalBook }) {
       <div className="flex items-start gap-3 sm:gap-4">
         <CoverFrame book={book} sizes="80px" className="w-16 shrink-0 sm:w-20" />
         <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+          <p className="text-xs text-muted-foreground">Currently reading</p>
           <h2 className="font-heading text-base leading-snug sm:text-lg">{book.Title}</h2>
           {book.Author ? (
             <p className="text-sm text-muted-foreground">{book.Author}</p>
@@ -193,7 +193,7 @@ function ReadingCard({ book }: { book: LocalBook }) {
                 "mt-1 h-touch rounded-full bg-white px-4 text-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-white/90 md:h-8"
               )}
             >
-              Open
+              Continue
             </AppLink>
           ) : null}
         </div>
@@ -223,6 +223,34 @@ function StartReadingCard({ books }: { books: LocalBook[] }) {
     }
   }
 
+  if (books.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-3 rounded-2xl bg-card/80 p-4 ring-1 ring-foreground/10 backdrop-blur-xl sm:p-5">
+        <h2 className="font-heading text-base sm:text-lg">Nothing waiting to start</h2>
+        <p className="text-sm text-muted-foreground">
+          Add a book or move a shelf title to TBR, then start it from here.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <AppLink
+            href="/add"
+            className={cn(buttonVariants({ size: "sm" }), "h-touch md:h-8")}
+          >
+            Add a book
+          </AppLink>
+          <AppLink
+            href="/library"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "h-touch md:h-8"
+            )}
+          >
+            Browse library
+          </AppLink>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
@@ -233,7 +261,14 @@ function StartReadingCard({ books }: { books: LocalBook[] }) {
           />
         }
       >
-        <span className="font-heading text-base sm:text-lg">Start reading.</span>
+        <span className="flex flex-col items-start gap-1">
+          <span className="font-heading text-base sm:text-lg">Start reading</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {books.length === 1
+              ? "1 title waiting in TBR"
+              : `${books.length} titles waiting in TBR`}
+          </span>
+        </span>
       </SheetTrigger>
       <SheetContent
         side={mdUp ? "right" : "bottom"}
@@ -242,41 +277,37 @@ function StartReadingCard({ books }: { books: LocalBook[] }) {
         <SheetHeader>
           <SheetTitle>Start reading</SheetTitle>
           <SheetDescription>
-            TBR books that are not Borrowed, in title order.
+            TBR books that are not borrowed, in title order.
           </SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4">
-          {books.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing is waiting.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {books.map((book) => (
-                <li key={bookKey(book)}>
-                  <button
-                    type="button"
-                    disabled={!book.ISBN || pendingIsbn !== null}
-                    onClick={() => void startReading(book)}
-                    className="flex w-full items-center gap-3 rounded-xl p-2 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring disabled:opacity-50"
-                  >
-                    <CoverFrame
-                      book={book}
-                      sizes="48px"
-                      className="w-10 shrink-0 sm:w-12"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{book.Title}</span>
-                      {book.Author ? (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {book.Author}
-                        </span>
-                      ) : null}
-                    </span>
-                    {pendingIsbn === book.ISBN ? <Spinner /> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="flex flex-col gap-2">
+            {books.map((book) => (
+              <li key={bookKey(book)}>
+                <button
+                  type="button"
+                  disabled={!book.ISBN || pendingIsbn !== null}
+                  onClick={() => void startReading(book)}
+                  className="flex w-full items-center gap-3 rounded-xl p-2 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <CoverFrame
+                    book={book}
+                    sizes="48px"
+                    className="w-10 shrink-0 sm:w-12"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{book.Title}</span>
+                    {book.Author ? (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {book.Author}
+                      </span>
+                    ) : null}
+                  </span>
+                  {pendingIsbn === book.ISBN ? <Spinner /> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </SheetContent>
     </Sheet>

@@ -5,7 +5,10 @@ import type { LocalBook } from "@/lib/offline/types"
 
 import {
   booksWaitingToStart,
+  countDestinations,
   destinations,
+  libraryShelfForPath,
+  libraryShelves,
   pickReadingCard,
   screenForPath,
   shelfCounts,
@@ -189,6 +192,20 @@ describe("path screens", () => {
         { href: "/add", label: "Add" },
         { href: "/library", label: "Library" },
       ]
+    )
+  })
+
+  it("maps library paths to shelf filters and home count links", () => {
+    assert.equal(libraryShelfForPath("/library"), "/library")
+    assert.equal(libraryShelfForPath("/tbr"), "/tbr")
+    assert.equal(libraryShelfForPath("/reading"), "/reading")
+    assert.deepEqual(
+      libraryShelves.map((item) => item.href),
+      ["/library", "/reading", "/tbr", "/done", "/to-buy", "/borrowed"]
+    )
+    assert.deepEqual(
+      countDestinations.map((item) => item.href),
+      ["/library", "/borrowed", "/tbr", "/to-buy"]
     )
   })
 

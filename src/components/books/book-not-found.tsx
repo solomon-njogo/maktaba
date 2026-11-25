@@ -12,7 +12,10 @@ export function BookNotFound() {
       <p className="text-sm text-muted-foreground sm:text-base">
         That ISBN is not in the library, or it has been removed.
       </p>
-      <AppLink href="/" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>
+      <AppLink
+        href="/library"
+        className={cn(buttonVariants({ size: "sm" }), "w-fit")}
+      >
         Back to library
       </AppLink>
     </PageShell>

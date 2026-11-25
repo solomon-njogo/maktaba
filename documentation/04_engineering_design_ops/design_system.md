@@ -53,8 +53,8 @@ Generic tags, counts, and chrome use `Badge` from `components/ui`. Pipeline and 
 | `size-touch` / `min-h-touch` (44px) | Phone chrome and card overflow |
 | `size-control` (2rem) | Compact `md+` controls |
 
-- **Below `md`:** compact header (wordmark, sync), bottom tabs (Library, TBR, Reading, Done, More). Add book is a floating action button at the bottom right, above the tab bar, and opens a bottom sheet. Library home is a cover grid whose columns follow width. Other lists use a horizontal cover + meta row.
-- **From `md`:** full top shelf nav. The same floating action button sits at the bottom right and opens add-book as a right sheet. Library home keeps the same sections with more columns. Other shelves use a two-column list.
+- **Below `md`:** compact header (wordmark, sync), bottom tabs (Home, Add, Library). Library includes a horizontal shelf filter strip (All / Reading / TBR / Done / To-Buy / Borrowed) that navigates the existing shelf routes. Home summary counts link to those same routes. Lists use a horizontal cover + meta row.
+- **From `md`:** full top nav for Home / Add / Library. Library keeps the same filter strip and a two-column list.
 - Overlays (sheet, dialog, dropdown) sit above the tab bar (`z-50` vs `z-30`). Toasts offset above the tab bar on phones.
 
 ## Typography
