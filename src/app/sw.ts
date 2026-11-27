@@ -3,10 +3,11 @@
 
 import { defaultCache } from "@serwist/turbopack/worker"
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist"
-import { CacheFirst, ExpirationPlugin, Serwist } from "serwist"
+import { CacheFirst, ExpirationPlugin, NetworkOnly, Serwist } from "serwist"
 
 import {
   BACKGROUND_SYNC_TAG,
+  drainOutboxForBackgroundSync,
   hydrateLibrary,
   PERIODIC_SYNC_TAG,
 } from "../lib/offline/sync"
@@ -32,6 +33,11 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: [
+    {
+      matcher: ({ sameOrigin, url: { pathname } }) =>
+        sameOrigin && pathname.startsWith("/api/"),
+      handler: new NetworkOnly(),
+    },
     {
       matcher: ({ url }) => coverHost(url.hostname),
       handler: new CacheFirst({
@@ -63,7 +69,7 @@ serwist.addEventListeners()
 self.addEventListener("sync", (event) => {
   const syncEvent = event as ExtendableEvent & { tag: string }
   if (syncEvent.tag !== BACKGROUND_SYNC_TAG) return
-  syncEvent.waitUntil(hydrateLibrary())
+  syncEvent.waitUntil(drainOutboxForBackgroundSync())
 })
 
 self.addEventListener("periodicsync", (event) => {

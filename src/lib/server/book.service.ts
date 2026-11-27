@@ -11,7 +11,9 @@ import type {
 import { cleanIsbnString } from "@/lib/isbn"
 
 import {
+  __resetAirtableForTests,
   AirtableRecord,
+  AirtableRequestError,
   getAirtableBase,
   type FieldSet,
 } from "./airtable"
@@ -29,20 +31,32 @@ const BORROWED_ON_FIELDS = ["BorrowedOn", "Borrowed On"] as const
 const BORROWED_UNTIL_FIELDS = ["BorrowedUntil", "Borrowed Until"] as const
 const DELETED_AT_FIELDS = ["DeletedAt", "Deleted At"] as const
 
-const FIELD_ALIASES: Record<string, string> = Object.fromEntries(
-  [
-    DATE_ADDED_FIELDS,
-    START_DATE_FIELDS,
-    END_DATE_FIELDS,
-    BORROWED_BY_FIELDS,
-    BORROWED_ON_FIELDS,
-    BORROWED_UNTIL_FIELDS,
-    DELETED_AT_FIELDS,
-  ].flatMap(([preferred, fallback]) => [
-    [preferred, fallback],
-    [fallback, preferred],
-  ])
-)
+const ALIAS_GROUPS = [
+  DATE_ADDED_FIELDS,
+  START_DATE_FIELDS,
+  END_DATE_FIELDS,
+  BORROWED_BY_FIELDS,
+  BORROWED_ON_FIELDS,
+  BORROWED_UNTIL_FIELDS,
+  DELETED_AT_FIELDS,
+] as const
+
+const FIELD_TO_GROUP = new Map<string, readonly [string, string]>()
+const FIELD_ALIASES: Record<string, string> = {}
+for (const group of ALIAS_GROUPS) {
+  const [preferred, fallback] = group
+  FIELD_TO_GROUP.set(preferred, group)
+  FIELD_TO_GROUP.set(fallback, group)
+  FIELD_ALIASES[preferred] = fallback
+  FIELD_ALIASES[fallback] = preferred
+}
+
+const MISSING_FIELD_CACHE_TTL_MS = 5 * 60_000
+const VALID_RECORD_ID = /^rec[a-zA-Z0-9]+$/
+
+type ResolvedFieldEntry = { name: string | null; at: number }
+const resolvedFieldNames = new Map<string, ResolvedFieldEntry>()
+const inFlightCreates = new Map<string, Promise<void>>()
 
 type AttachmentLike = { url?: string }
 
@@ -55,7 +69,7 @@ function isbnFormula(isbn: string): string {
 }
 
 const OPEN_LIBRARY_TIMEOUT_MS = 4_000
-const GOOGLE_BOOKS_TIMEOUT_MS = 10_000
+const GOOGLE_BOOKS_TIMEOUT_MS = 5_000
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
@@ -152,7 +166,19 @@ function toAirtableDate(value: string | undefined): string | null {
   if (value == null) return null
   const iso = value.trim().slice(0, 10)
   if (!iso) return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null
+  }
   return iso
 }
 
@@ -171,6 +197,31 @@ function firstDateField(
   return undefined
 }
 
+function observeRecordFields(record: AirtableRecord) {
+  const keys = Object.keys(record.fields ?? {})
+  if (keys.length === 0) return
+  const now = Date.now()
+  for (const group of ALIAS_GROUPS) {
+    const canonical = group[0]
+    for (const candidate of group) {
+      if (keys.includes(candidate)) {
+        resolvedFieldNames.set(canonical, { name: candidate, at: now })
+        break
+      }
+    }
+  }
+}
+
+function resolvedColumnName(canonical: string): string | null | undefined {
+  const entry = resolvedFieldNames.get(canonical)
+  if (!entry) return undefined
+  if (entry.name === null && Date.now() - entry.at >= MISSING_FIELD_CACHE_TTL_MS) {
+    resolvedFieldNames.delete(canonical)
+    return undefined
+  }
+  return entry.name
+}
+
 function setAliased(
   fields: FieldSet,
   names: readonly string[],
@@ -182,21 +233,58 @@ function setAliased(
 function setAliasedIfFilled(
   fields: FieldSet,
   names: readonly string[],
-  value: string | undefined
+  value: unknown,
+  fieldLabel: string
 ) {
   if (value === undefined) return
+  if (typeof value !== "string") {
+    throw new HttpError(400, `${fieldLabel} must be a string.`)
+  }
   const trimmed = value.trim()
   if (!trimmed) return
   setAliased(fields, names, trimmed)
 }
 
-function setDateAliased(
+function setDateAliasedCreate(
   fields: FieldSet,
   names: readonly string[],
-  value: string | undefined
+  value: unknown,
+  fieldLabel: string
 ) {
+  if (value === undefined || value === null) return
+  if (typeof value !== "string") {
+    throw new HttpError(400, `${fieldLabel} must be a string.`)
+  }
+  if (!value.trim()) return
   const date = toAirtableDate(value)
-  if (!date) return
+  if (!date) {
+    throw new HttpError(400, `Invalid ${fieldLabel} date. Use YYYY-MM-DD.`)
+  }
+  setAliased(fields, names, date)
+}
+
+function setDateAliasedUpdate(
+  fields: FieldSet,
+  names: readonly string[],
+  value: unknown,
+  fieldLabel: string
+) {
+  if (value === undefined) return
+  if (value === null) {
+    setAliased(fields, names, null)
+    return
+  }
+  if (typeof value !== "string") {
+    throw new HttpError(400, `${fieldLabel} must be a string.`)
+  }
+  if (!value.trim()) {
+    setAliased(fields, names, null)
+    return
+  }
+  const date = toAirtableDate(value)
+  if (!date) {
+    throw new HttpError(400, `Invalid ${fieldLabel} date. Use YYYY-MM-DD.`)
+  }
   setAliased(fields, names, date)
 }
 
@@ -210,10 +298,12 @@ function formatRecord(
   record: AirtableRecord,
   inLibrary: boolean
 ): FormattedBookResponse {
-  const isbn =
+  observeRecordFields(record)
+  const rawIsbn =
     asOptionalString(record.get("ISBN")) ??
     asStringArray(record.get("ISBN13"))[0] ??
     asStringArray(record.get("ISBN10"))[0]
+  const isbn = rawIsbn ? cleanIsbnString(rawIsbn) || rawIsbn : undefined
   const status = (asOptionalString(record.get("Status")) as BookStatus) || "TBR"
   const thumbnail = thumbnailFromField(record.get("Thumbnail"), isbn)
 
@@ -262,9 +352,7 @@ const CATALOG_FRESH_MS = 1000
 
 let catalogCache: { at: number; books: FormattedBookResponse[] } | null = null
 let catalogFlight: Promise<FormattedBookResponse[]> | null = null
-let catalogLoaded = false
 let catalogEpoch = 0
-let deletedByIsbn = new Map<string, string>()
 
 function sortCatalog(books: FormattedBookResponse[]) {
   return [...books].sort((a, b) =>
@@ -274,7 +362,6 @@ function sortCatalog(books: FormattedBookResponse[]) {
 
 function rememberBook(book: FormattedBookResponse) {
   catalogEpoch += 1
-  if (book.ISBN) deletedByIsbn.delete(book.ISBN)
   if (!catalogCache) return
   const books = catalogCache.books.filter(
     (item) => item.ISBN !== book.ISBN && item.id !== book.id
@@ -285,7 +372,6 @@ function rememberBook(book: FormattedBookResponse) {
 
 function forgetBook(isbn: string, recordId?: string) {
   catalogEpoch += 1
-  if (recordId) deletedByIsbn.set(isbn, recordId)
   if (!catalogCache) return
   catalogCache = {
     at: Date.now(),
@@ -295,32 +381,25 @@ function forgetBook(isbn: string, recordId?: string) {
   }
 }
 
-async function fetchCatalog(): Promise<{
-  books: FormattedBookResponse[]
-  deleted: Map<string, string>
-}> {
+async function fetchCatalog(): Promise<FormattedBookResponse[]> {
   const records = await getAirtableBase()(TABLE_NAME).select().all()
-  const deleted = new Map<string, string>()
   const books: FormattedBookResponse[] = []
   for (const record of records) {
     const book = formatRecord(record, true)
     if (isDeleted(firstNamedField(record, DELETED_AT_FIELDS))) {
-      if (book.ISBN) deleted.set(book.ISBN, record.id)
       continue
     }
     books.push(book)
   }
-  return { books: sortCatalog(books), deleted }
+  return sortCatalog(books)
 }
 
 async function refreshCatalog(): Promise<FormattedBookResponse[]> {
   if (!catalogFlight) {
     const epoch = catalogEpoch
     catalogFlight = fetchCatalog()
-      .then(({ books, deleted }) => {
+      .then((books) => {
         if (epoch === catalogEpoch) {
-          deletedByIsbn = deleted
-          catalogLoaded = true
           catalogCache = { at: Date.now(), books }
         }
         return catalogCache?.books ?? books
@@ -333,16 +412,11 @@ async function refreshCatalog(): Promise<FormattedBookResponse[]> {
 }
 
 async function readCatalog(): Promise<FormattedBookResponse[]> {
-  if (catalogCache) {
-    if (Date.now() - catalogCache.at >= CATALOG_FRESH_MS) {
-      void refreshCatalog().catch(() => {})
-    }
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_FRESH_MS) {
     return catalogCache.books
   }
   return refreshCatalog()
 }
-
-void refreshCatalog().catch(() => {})
 
 export async function listBooks(filters?: {
   status?: string
@@ -535,9 +609,65 @@ export async function getLibraryBookByIsbn(
   return formatRecord(existing, true)
 }
 
+function applyCreateExtras(
+  fields: FieldSet,
+  extras?: BookCreatePayload
+) {
+  if (!extras) return
+  if (extras.Author !== undefined) {
+    if (typeof extras.Author !== "string") {
+      throw new HttpError(400, "Author must be a string.")
+    }
+    const trimmedAuthor = extras.Author.trim()
+    if (trimmedAuthor) fields.Author = trimmedAuthor
+  }
+  if (extras.Genre !== undefined) {
+    if (typeof extras.Genre !== "string") {
+      throw new HttpError(400, "Genre must be a string.")
+    }
+    const trimmedGenre = extras.Genre.trim()
+    if (trimmedGenre) fields.Genre = trimmedGenre
+  }
+  if (extras.Status !== undefined) {
+    if (!VALID_STATUSES.includes(extras.Status)) {
+      throw new HttpError(400, "Invalid status.")
+    }
+    fields.Status = extras.Status
+  }
+  if (extras.Borrowed !== undefined) {
+    if (extras.Borrowed !== "Yes" && extras.Borrowed !== "No") {
+      throw new HttpError(400, "Borrowed must be Yes or No.")
+    }
+    fields.Borrowed = extras.Borrowed
+  }
+  setDateAliasedCreate(fields, START_DATE_FIELDS, extras.StartDate, "StartDate")
+  setDateAliasedCreate(fields, END_DATE_FIELDS, extras.EndDate, "EndDate")
+  if ((extras.Borrowed ?? fields.Borrowed) !== "No") {
+    setAliasedIfFilled(
+      fields,
+      BORROWED_BY_FIELDS,
+      extras.BorrowedBy,
+      "BorrowedBy"
+    )
+    setDateAliasedCreate(
+      fields,
+      BORROWED_ON_FIELDS,
+      extras.BorrowedOn,
+      "BorrowedOn"
+    )
+    setDateAliasedCreate(
+      fields,
+      BORROWED_UNTIL_FIELDS,
+      extras.BorrowedUntil,
+      "BorrowedUntil"
+    )
+  }
+}
+
 function fieldsFromPreview(
   preview: FormattedBookResponse,
-  isbn: string
+  isbn: string,
+  extras?: BookCreatePayload
 ): FieldSet {
   const fields: FieldSet = {
     Title: preview.Title,
@@ -547,70 +677,53 @@ function fieldsFromPreview(
     Borrowed: "No",
   }
 
-  if (preview.Genre) fields.Genre = preview.Genre
+  if (preview.Genre?.trim()) fields.Genre = preview.Genre.trim()
   if (preview.coverUrl) {
     fields.Thumbnail = [
       { url: preview.coverUrl },
     ] as unknown as FieldSet["Thumbnail"]
   }
 
+  applyCreateExtras(fields, extras)
   return fields
 }
 
 function fieldsFromManual(isbn: string, extras: BookCreatePayload): FieldSet {
+  if (extras.Title !== undefined && typeof extras.Title !== "string") {
+    throw new HttpError(400, "Title must be a string.")
+  }
   const title = extras.Title?.trim()
   if (!title) {
     throw new HttpError(400, "Title is required.")
   }
-  if (extras.Status && !VALID_STATUSES.includes(extras.Status)) {
-    throw new HttpError(400, "Invalid status.")
-  }
-  if (extras.Borrowed && extras.Borrowed !== "Yes" && extras.Borrowed !== "No") {
-    throw new HttpError(400, "Borrowed must be Yes or No.")
+  if (extras.Author !== undefined && typeof extras.Author !== "string") {
+    throw new HttpError(400, "Author must be a string.")
   }
 
   const fields: FieldSet = {
     Title: title,
     Author: extras.Author?.trim() ?? "",
     ISBN: isbn,
-    Status: extras.Status ?? "TBR",
-    Borrowed: extras.Borrowed ?? "No",
+    Status: "TBR",
+    Borrowed: "No",
   }
 
-  if (extras.Genre !== undefined) fields.Genre = extras.Genre.trim()
-  setDateAliased(fields, START_DATE_FIELDS, extras.StartDate)
-  setDateAliased(fields, END_DATE_FIELDS, extras.EndDate)
-  setAliasedIfFilled(fields, BORROWED_BY_FIELDS, extras.BorrowedBy)
-  setDateAliased(fields, BORROWED_ON_FIELDS, extras.BorrowedOn)
-  setDateAliased(fields, BORROWED_UNTIL_FIELDS, extras.BorrowedUntil)
-
+  applyCreateExtras(fields, extras)
   return fields
 }
 
-export async function createBook(
-  isbn: string,
+async function executeCreateBook(
+  cleanIsbn: string,
   extras?: BookCreatePayload
 ): Promise<FormattedBookResponse> {
-  const cleanIsbn = cleanIsbnString(isbn)
-  if (!cleanIsbn) {
-    throw new HttpError(400, "A valid ISBN is required.")
+  if (extras?.Title !== undefined && typeof extras.Title !== "string") {
+    throw new HttpError(400, "Title must be a string.")
   }
-
   const manual = Boolean(extras?.Title?.trim())
-
-  if (catalogLoaded) {
-    const active = catalogCache?.books.find((book) => book.ISBN === cleanIsbn)
-    if (active) {
-      throw new HttpError(
-        409,
-        `Book with ISBN ${cleanIsbn} is already in the library.`
-      )
-    }
-    const deletedId = deletedByIsbn.get(cleanIsbn)
-    if (deletedId) {
-      return restoreDeleted(cleanIsbn, deletedId, manual, extras)
-    }
-    return insertBook(cleanIsbn, manual, extras)
+  if (manual) {
+    fieldsFromManual(cleanIsbn, extras ?? {})
+  } else {
+    applyCreateExtras({ Status: "TBR", Borrowed: "No" }, extras)
   }
 
   const records = await findRecordsByIsbn(cleanIsbn)
@@ -634,24 +747,67 @@ export async function createBook(
   return insertBook(cleanIsbn, manual, extras)
 }
 
+export async function createBook(
+  isbn: string,
+  extras?: BookCreatePayload
+): Promise<FormattedBookResponse> {
+  const cleanIsbn = cleanIsbnString(isbn)
+  if (!cleanIsbn) {
+    throw new HttpError(400, "A valid ISBN is required.")
+  }
+
+  const previous = inFlightCreates.get(cleanIsbn) ?? Promise.resolve()
+  const task = previous
+    .catch(() => undefined)
+    .then(() => executeCreateBook(cleanIsbn, extras))
+  const settled = task.then(
+    () => undefined,
+    () => undefined
+  )
+  inFlightCreates.set(cleanIsbn, settled)
+  try {
+    return await task
+  } finally {
+    if (inFlightCreates.get(cleanIsbn) === settled) {
+      inFlightCreates.delete(cleanIsbn)
+    }
+  }
+}
+
 async function restoreDeleted(
   isbn: string,
   recordId: string,
   manual: boolean,
   extras?: BookCreatePayload
 ) {
-  const restoredFields: FieldSet = manual
-    ? { ...fieldsFromManual(isbn, extras ?? {}) }
-    : {
-        Status: "TBR",
-        Borrowed: "No",
-      }
+  let restoredFields: FieldSet
+  if (manual) {
+    restoredFields = { ...fieldsFromManual(isbn, extras ?? {}) }
+  } else {
+    restoredFields = {
+      Status: "TBR",
+      Borrowed: "No",
+    }
+    applyCreateExtras(restoredFields, extras)
+  }
   setAliased(restoredFields, DELETED_AT_FIELDS, null)
-  if (!manual) clearBorrowedPerson(restoredFields)
-  const restored = await applyRecordFields(restoredFields, recordId)
-  const book = formatRecord(restored, true)
-  rememberBook(book)
-  return book
+  if ((extras?.Borrowed ?? "No") === "No") {
+    clearBorrowedPerson(restoredFields)
+  }
+  try {
+    const restored = await applyRecordFields(restoredFields, recordId)
+    const book = formatRecord(restored, true)
+    rememberBook(book)
+    return book
+  } catch (error) {
+    if (
+      error instanceof AirtableRequestError &&
+      (error.status === 404 || error.status === 403)
+    ) {
+      return insertBook(isbn, manual, extras)
+    }
+    throw error
+  }
 }
 
 async function insertBook(
@@ -667,25 +823,43 @@ async function insertBook(
   }
 
   const preview = await fetchBookFromCatalogs(isbn)
-  const created = await applyRecordFields(fieldsFromPreview(preview, isbn))
+  const created = await applyRecordFields(
+    fieldsFromPreview(preview, isbn, extras)
+  )
   const book = formatRecord(created, true)
   rememberBook(book)
   return book
 }
 
-async function recordForWrite(
+async function applyWithRecordFallback(
   isbn: string,
+  fields: FieldSet,
   recordId?: string
-): Promise<AirtableRecord | { id: string }> {
-  const id =
-    recordId?.trim() ||
+): Promise<AirtableRecord> {
+  const trimmedId = recordId?.trim()
+  const hintId =
+    (trimmedId && VALID_RECORD_ID.test(trimmedId) ? trimmedId : undefined) ||
     catalogCache?.books.find((book) => book.ISBN === isbn)?.id
-  if (id) return { id }
-  const existing = await findActiveRecordByIsbn(isbn)
-  if (!existing) {
+
+  if (hintId) {
+    try {
+      return await applyRecordFields(fields, hintId)
+    } catch (error) {
+      if (
+        !(error instanceof AirtableRequestError) ||
+        (error.status !== 404 && error.status !== 403)
+      ) {
+        throw error
+      }
+      forgetBook(isbn, hintId)
+    }
+  }
+
+  const active = await findActiveRecordByIsbn(isbn)
+  if (!active) {
     throw new HttpError(404, `Book with ISBN ${isbn} is not in the library.`)
   }
-  return existing
+  return applyRecordFields(fields, active.id)
 }
 
 export async function updateBook(
@@ -694,11 +868,12 @@ export async function updateBook(
   recordId?: string
 ): Promise<FormattedBookResponse> {
   const cleanIsbn = cleanIsbnString(isbn)
-  const existing = await recordForWrite(cleanIsbn, recordId)
-
   const fields: FieldSet = {}
 
   if (patch.Title !== undefined) {
+    if (typeof patch.Title !== "string") {
+      throw new HttpError(400, "Title must be a string.")
+    }
     const title = patch.Title.trim()
     if (!title) {
       throw new HttpError(400, "Title is required.")
@@ -707,11 +882,20 @@ export async function updateBook(
   }
 
   if (patch.Author !== undefined) {
+    if (typeof patch.Author !== "string") {
+      throw new HttpError(400, "Author must be a string.")
+    }
     fields.Author = patch.Author.trim()
   }
 
   if (patch.Genre !== undefined) {
-    fields.Genre = patch.Genre.trim()
+    if (patch.Genre === null) {
+      fields.Genre = null
+    } else if (typeof patch.Genre === "string") {
+      fields.Genre = patch.Genre.trim() || null
+    } else {
+      throw new HttpError(400, "Genre must be a string.")
+    }
   }
 
   if (patch.Status !== undefined) {
@@ -721,8 +905,8 @@ export async function updateBook(
     fields.Status = patch.Status
   }
 
-  setDateAliased(fields, START_DATE_FIELDS, patch.StartDate)
-  setDateAliased(fields, END_DATE_FIELDS, patch.EndDate)
+  setDateAliasedUpdate(fields, START_DATE_FIELDS, patch.StartDate, "StartDate")
+  setDateAliasedUpdate(fields, END_DATE_FIELDS, patch.EndDate, "EndDate")
 
   if (patch.Borrowed !== undefined) {
     if (patch.Borrowed !== "Yes" && patch.Borrowed !== "No") {
@@ -734,15 +918,39 @@ export async function updateBook(
     }
   }
 
-  setAliasedIfFilled(fields, BORROWED_BY_FIELDS, patch.BorrowedBy)
-  setDateAliased(fields, BORROWED_ON_FIELDS, patch.BorrowedOn)
-  setDateAliased(fields, BORROWED_UNTIL_FIELDS, patch.BorrowedUntil)
+  if (patch.Borrowed !== "No") {
+    if (patch.BorrowedBy !== undefined) {
+      if (patch.BorrowedBy === null) {
+        setAliased(fields, BORROWED_BY_FIELDS, null)
+      } else if (typeof patch.BorrowedBy === "string") {
+        setAliased(fields, BORROWED_BY_FIELDS, patch.BorrowedBy.trim() || null)
+      } else {
+        throw new HttpError(400, "BorrowedBy must be a string.")
+      }
+    }
+    setDateAliasedUpdate(
+      fields,
+      BORROWED_ON_FIELDS,
+      patch.BorrowedOn,
+      "BorrowedOn"
+    )
+    setDateAliasedUpdate(
+      fields,
+      BORROWED_UNTIL_FIELDS,
+      patch.BorrowedUntil,
+      "BorrowedUntil"
+    )
+  }
 
   if (Object.keys(fields).length === 0) {
     throw new HttpError(400, "No valid fields to update.")
   }
 
-  const updated = await applyRecordFields(fields, existing.id)
+  const updated = await applyWithRecordFallback(cleanIsbn, fields, recordId)
+  if (isDeleted(firstNamedField(updated, DELETED_AT_FIELDS))) {
+    forgetBook(cleanIsbn, updated.id)
+    throw new HttpError(404, `Book with ISBN ${cleanIsbn} is not in the library.`)
+  }
   const book = formatRecord(updated, true)
   rememberBook(book)
   return book
@@ -772,21 +980,66 @@ function unknownAirtableField(error: unknown): string | null {
 
 function emptyDateAirtableField(error: unknown): string | null {
   for (const text of airtableErrorTexts(error)) {
-    const match = text.match(/Cannot parse date value "" for field (.+)$/)
+    const match = text.match(/Cannot parse date value "" for field "?([^"]+)"?$/)
     if (match?.[1]) return match[1].trim()
   }
   return null
 }
 
+function isThumbnailValueError(error: unknown): boolean {
+  const type =
+    error instanceof AirtableRequestError ? error.error?.type : undefined
+  const texts = airtableErrorTexts(error)
+  if (
+    type !== "INVALID_VALUE_FOR_COLUMN" &&
+    type !== "INVALID_ATTACHMENT_OBJECT" &&
+    !texts.some((text) => /attachment/i.test(text))
+  ) {
+    return false
+  }
+  return texts.some((text) => /\bThumbnail\b/i.test(text))
+}
+
+function applyCachedFieldNames(fields: FieldSet): FieldSet {
+  const resolved: FieldSet = {}
+  for (const [key, value] of Object.entries(fields)) {
+    const group = FIELD_TO_GROUP.get(key)
+    if (!group) {
+      resolved[key] = value
+      continue
+    }
+    const cached = resolvedColumnName(group[0])
+    if (cached === null) continue
+    const target = cached ?? key
+    if (!(target in resolved)) {
+      resolved[target] = value
+    }
+  }
+  return resolved
+}
+
+function cacheSuccessfulFieldNames(fields: FieldSet) {
+  const now = Date.now()
+  for (const key of Object.keys(fields)) {
+    const group = FIELD_TO_GROUP.get(key)
+    if (group) {
+      resolvedFieldNames.set(group[0], { name: key, at: now })
+    }
+  }
+}
+
 async function applyRecordFields(fields: FieldSet, existingId?: string) {
-  const pending: FieldSet = { ...fields }
+  const pending = applyCachedFieldNames(fields)
+  const tried = new Set<string>()
   const table = getAirtableBase()(TABLE_NAME)
 
   while (Object.keys(pending).length > 0) {
     try {
-      return existingId
+      const record = existingId
         ? await table.update(existingId, pending)
         : await table.create(pending)
+      cacheSuccessfulFieldNames(pending)
+      return record
     } catch (error) {
       const emptyDateField = emptyDateAirtableField(error)
       if (emptyDateField && emptyDateField in pending) {
@@ -798,11 +1051,34 @@ async function applyRecordFields(fields: FieldSet, existingId?: string) {
         continue
       }
 
+      if ("Thumbnail" in pending && isThumbnailValueError(error)) {
+        const current = pending.Thumbnail
+        if (
+          Array.isArray(current) &&
+          current[0] &&
+          typeof current[0] === "object" &&
+          "url" in current[0] &&
+          typeof (current[0] as { url?: unknown }).url === "string"
+        ) {
+          pending.Thumbnail = (current[0] as { url: string }).url
+          continue
+        }
+        delete pending.Thumbnail
+        continue
+      }
+
       const name = unknownAirtableField(error)
       if (name && name in pending) {
+        tried.add(name)
+        const group = FIELD_TO_GROUP.get(name)
+        if (group && resolvedFieldNames.get(group[0])?.name === name) {
+          resolvedFieldNames.delete(group[0])
+        }
         const alias = FIELD_ALIASES[name]
-        if (alias && !(alias in pending)) {
+        if (alias && !tried.has(alias) && !(alias in pending)) {
           pending[alias] = pending[name]
+        } else if (group) {
+          resolvedFieldNames.set(group[0], { name: null, at: Date.now() })
         }
         delete pending[name]
         continue
@@ -822,13 +1098,11 @@ export async function softDeleteBook(
   recordId?: string
 ): Promise<FormattedBookResponse> {
   const cleanIsbn = cleanIsbnString(isbn)
-  const existing = await recordForWrite(cleanIsbn, recordId)
-
   const fields: FieldSet = {}
   setAliased(fields, DELETED_AT_FIELDS, new Date().toISOString())
-  const updated = await applyRecordFields(fields, existing.id)
+  const updated = await applyWithRecordFallback(cleanIsbn, fields, recordId)
   const book = formatRecord(updated, false)
-  forgetBook(cleanIsbn, existing.id)
+  forgetBook(cleanIsbn, updated.id)
   return book
 }
 
@@ -841,4 +1115,13 @@ export function requireIsbn(raw: string | undefined): string {
     throw new HttpError(400, "A valid ISBN string parameter is required.")
   }
   return isbn
+}
+
+export function __resetBookServiceForTests() {
+  catalogCache = null
+  catalogFlight = null
+  catalogEpoch = 0
+  resolvedFieldNames.clear()
+  inFlightCreates.clear()
+  __resetAirtableForTests()
 }

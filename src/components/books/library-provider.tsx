@@ -6,15 +6,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
 
 import { getBook } from "@/lib/api/books"
-import { getAllBooks, getOutbox } from "@/lib/offline/db"
+import { getAllBooks, getLastSyncedAt, getOutbox } from "@/lib/offline/db"
 import { subscribeLibrary } from "@/lib/offline/events"
 import { filterBooks } from "@/lib/offline/books-repository"
-import { readSyncStatus, startOfflineSync } from "@/lib/offline/sync"
+import { buildSyncSnapshot, startOfflineSync } from "@/lib/offline/sync"
 import type { LocalBook, OutboxOp, SyncStatus } from "@/lib/offline/types"
 import type { ListBooksFilters } from "@/lib/api/books"
 
@@ -25,6 +26,7 @@ type LibraryContextValue = {
   status: SyncStatus
   booksFor: (filters?: ListBooksFilters) => LocalBook[]
   bookByIsbn: (isbn: string) => LocalBook | undefined
+  anyBookByIsbn: (isbn: string) => LocalBook | undefined
 }
 
 const LibraryContext = createContext<LibraryContextValue | null>(null)
@@ -40,24 +42,30 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [outbox, setOutbox] = useState<OutboxOp[]>([])
   const [ready, setReady] = useState(false)
   const [status, setStatus] = useState<SyncStatus>(idleStatus)
+  const refreshSeqRef = useRef(0)
 
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeqRef.current
     try {
-      const [all, ops, nextStatus] = await Promise.all([
+      const [all, ops, lastSyncedAt] = await Promise.all([
         getAllBooks(),
         getOutbox(),
-        readSyncStatus(),
+        getLastSyncedAt(),
       ])
+      if (seq !== refreshSeqRef.current) return
       setBooks(all)
       setOutbox(ops)
-      setStatus(nextStatus)
+      setStatus(buildSyncSnapshot(ops, lastSyncedAt))
     } catch {
+      if (seq !== refreshSeqRef.current) return
       setStatus((current) => ({
         ...current,
         online: typeof navigator === "undefined" ? true : navigator.onLine,
       }))
     } finally {
-      setReady(true)
+      if (seq === refreshSeqRef.current) {
+        setReady(true)
+      }
     }
   }, [])
 
@@ -84,6 +92,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       booksFor: (filters) => filterBooks(books, filters),
       bookByIsbn: (isbn) =>
         books.find((book) => book.ISBN === isbn && !book.deleted),
+      anyBookByIsbn: (isbn) => books.find((book) => book.ISBN === isbn),
     }),
     [books, outbox, ready, status]
   )
@@ -135,11 +144,12 @@ export function useBook(isbn: string | undefined) {
   }
 
   const local = isbn ? context.bookByIsbn(isbn) : undefined
+  const anyLocal = isbn ? context.anyBookByIsbn(isbn) : undefined
   const [missedIsbn, setMissedIsbn] = useState<string | null>(null)
   const [loadingIsbn, setLoadingIsbn] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isbn || local || !context.ready) return
+    if (!isbn || anyLocal || !context.ready) return
 
     let cancelled = false
     const handle = window.setTimeout(() => {
@@ -168,7 +178,7 @@ export function useBook(isbn: string | undefined) {
       cancelled = true
       window.clearTimeout(handle)
     }
-  }, [isbn, local, context.ready])
+  }, [isbn, anyLocal, context.ready])
 
   const loadingRemote = Boolean(isbn && loadingIsbn === isbn)
 
@@ -180,6 +190,6 @@ export function useBook(isbn: string | undefined) {
       context.ready &&
       !loadingRemote &&
       !local &&
-      missedIsbn === isbn,
+      (missedIsbn === isbn || Boolean(anyLocal?.deleted)),
   }
 }

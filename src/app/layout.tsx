@@ -56,7 +56,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <SerwistProvider
           swUrl="/serwist/sw.js"
-          options={{ type: "classic" }}
+          options={{ scope: "/", type: "classic" }}
         >
           <ThemeProvider
             attribute="class"

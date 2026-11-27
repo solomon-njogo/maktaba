@@ -14,22 +14,29 @@ export function SyncStatusBadge() {
   const path = useAppPath()
   const onQueue = path === "/pending"
 
-  if (!status.online) {
-    return (
-      <Badge variant="outline" className={badgeClass}>
-        Offline
-      </Badge>
-    )
-  }
-
   if (status.pendingCount > 0) {
+    const label = !status.online
+      ? `Offline · ${status.pendingCount}`
+      : status.syncing
+        ? "Syncing"
+        : `Pending ${status.pendingCount}`
     return (
       <Badge
         variant="outline"
         className={cn(badgeClass, onQueue && "bg-muted")}
-        render={<AppLink href="/pending" aria-label="View pending sync queue" />}
+        render={
+          <AppLink href="/pending" aria-label="View pending sync queue" />
+        }
       >
-        {status.syncing ? "Syncing" : `Pending ${status.pendingCount}`}
+        {label}
+      </Badge>
+    )
+  }
+
+  if (!status.online) {
+    return (
+      <Badge variant="outline" className={badgeClass}>
+        Offline
       </Badge>
     )
   }
