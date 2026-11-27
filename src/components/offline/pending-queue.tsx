@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CloudOffIcon,
+  RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -23,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardAction,
@@ -46,7 +47,9 @@ import {
   dropQueuedOp,
   moveQueuedOp,
 } from "@/lib/offline/books-repository"
+import { retryOutboxNow } from "@/lib/offline/sync"
 import type { BookCreatePayload, OutboxOp, OutboxOpType } from "@/lib/offline/types"
+import { cn } from "@/lib/utils"
 
 const OP_LABEL: Record<OutboxOpType, string> = {
   create: "Add",
@@ -67,9 +70,15 @@ const FIELD_LABEL: Record<keyof BookCreatePayload, string> = {
   BorrowedUntil: "Borrowed until",
 }
 
-function queuedAt(op: OutboxOp) {
-  return new Date(op.queuedAt ?? op.createdAt).toLocaleString(undefined, {
+function formatTimestamp(ms: number) {
+  return new Date(ms).toLocaleString(undefined, {
     dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
+
+function formatTimeOnly(ms: number) {
+  return new Date(ms).toLocaleTimeString(undefined, {
     timeStyle: "short",
   })
 }
@@ -106,6 +115,7 @@ function QueueItem({
   total,
   busy,
   onMove,
+  onRetry,
   onDrop,
 }: {
   op: OutboxOp
@@ -115,12 +125,17 @@ function QueueItem({
   total: number
   busy: boolean
   onMove: (id: string, direction: -1 | 1) => void
+  onRetry: (id: string) => void
   onDrop: (id: string) => void
 }) {
   const summary = payloadSummary(op.payload)
   const heading = title || op.isbn
   const href =
     op.type === "delete" ? null : `/books/${encodeURIComponent(op.isbn)}`
+  const needsTitle =
+    Boolean(op.paused) &&
+    op.type === "create" &&
+    !op.payload?.Title?.trim()
 
   return (
     <li>
@@ -139,14 +154,28 @@ function QueueItem({
             <CardTitle className="min-w-0 wrap-break-word">{heading}</CardTitle>
           )}
           <CardDescription>{author || "Unknown author"}</CardDescription>
-          <CardAction>
+          <CardAction className="flex flex-wrap items-center justify-end gap-1.5">
+            {op.paused ? (
+              <Badge variant="destructive">Needs attention</Badge>
+            ) : null}
             <Badge variant="outline">{OP_LABEL[op.type]}</Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-1 text-xs text-muted-foreground">
           <p>ISBN {op.isbn}</p>
-          <p>Queued {queuedAt(op)}</p>
+          <p>Queued {formatTimestamp(op.queuedAt ?? op.createdAt)}</p>
           {summary ? <p>{summary}</p> : null}
+          {!op.paused && (op.attempts ?? 0) > 0 ? (
+            <p>
+              Attempts: {op.attempts}
+              {op.nextRetryAt
+                ? ` · Next retry ${formatTimeOnly(op.nextRetryAt)}`
+                : ""}
+            </p>
+          ) : null}
+          {op.lastError ? (
+            <p className="text-destructive">{op.lastError}</p>
+          ) : null}
         </CardContent>
         <CardFooter className="flex flex-wrap items-center gap-2">
           <Button
@@ -173,6 +202,28 @@ function QueueItem({
           </Button>
           <Button
             type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-touch md:min-h-7"
+            disabled={busy}
+            onClick={() => onRetry(op.id)}
+          >
+            <RefreshCwIcon data-icon="inline-start" />
+            Retry
+          </Button>
+          {needsTitle ? (
+            <AppLink
+              href={`/books/${encodeURIComponent(op.isbn)}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "min-h-touch md:min-h-7"
+              )}
+            >
+              Add title
+            </AppLink>
+          ) : null}
+          <Button
+            type="button"
             variant="destructive"
             size="sm"
             className="ms-auto min-h-touch md:min-h-7"
@@ -191,7 +242,11 @@ function QueueItem({
 export function PendingQueueView() {
   const { ops, ready, status, bookFor } = usePendingQueue()
   const [busy, setBusy] = useState(false)
+  const [syncingNow, setSyncingNow] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
+
+  const disabled = busy || syncingNow || status.syncing
+  const hasOpErrors = ops.some((op) => Boolean(op.lastError))
 
   async function handleMove(id: string, direction: -1 | 1) {
     setBusy(true)
@@ -199,6 +254,41 @@ export function PendingQueueView() {
       await moveQueuedOp(id, direction)
     } catch {
       toast.error("Could not reorder the queue.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleSyncNow() {
+    setSyncingNow(true)
+    try {
+      const result = await retryOutboxNow()
+      if (result.retryableRemaining === 0 && result.pausedRemaining === 0) {
+        toast.success("Queue synced.")
+      } else if (
+        result.pausedRemaining > 0 &&
+        result.retryableRemaining === 0
+      ) {
+        toast.error("Some items need attention before syncing.")
+      } else {
+        toast.error("Could not sync all changes. Will retry.")
+      }
+    } catch {
+      toast.error("Could not sync the queue.")
+    } finally {
+      setSyncingNow(false)
+    }
+  }
+
+  async function handleRetryItem(id: string) {
+    setBusy(true)
+    try {
+      const result = await retryOutboxNow(id)
+      if (result.retryableRemaining === 0 && result.pausedRemaining === 0) {
+        toast.success("Synced change.")
+      }
+    } catch {
+      toast.error("Could not retry that item.")
     } finally {
       setBusy(false)
     }
@@ -240,19 +330,40 @@ export function PendingQueueView() {
           </p>
         </div>
         {ops.length > 0 ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-fit min-h-touch md:min-h-7"
-            disabled={busy}
-            onClick={() => setClearOpen(true)}
-          >
-            Clear queue
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="min-h-touch md:min-h-7"
+              disabled={disabled}
+              onClick={() => void handleSyncNow()}
+            >
+              {syncingNow || status.syncing ? (
+                <>
+                  <Spinner />
+                  Syncing…
+                </>
+              ) : (
+                <>
+                  <RefreshCwIcon data-icon="inline-start" />
+                  Sync now
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit min-h-touch md:min-h-7"
+              disabled={disabled}
+              onClick={() => setClearOpen(true)}
+            >
+              Clear queue
+            </Button>
+          </div>
         ) : null}
       </header>
-      {status.lastError ? (
+      {status.lastError && !hasOpErrors ? (
         <p className="text-sm text-destructive">{status.lastError}</p>
       ) : null}
       {!ready ? (
@@ -274,8 +385,9 @@ export function PendingQueueView() {
                 author={book?.Author}
                 index={index}
                 total={ops.length}
-                busy={busy}
+                busy={disabled}
                 onMove={handleMove}
+                onRetry={(id) => void handleRetryItem(id)}
                 onDrop={handleDrop}
               />
             )

@@ -108,8 +108,15 @@ export function BookDetail({
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   if (book !== formBook) {
+    const sameBook = book.ISBN === formBook.ISBN
     setFormBook(book)
-    setForm(formFromBook(book))
+    if (!sameBook) {
+      setEditing(false)
+      setDeleteOpen(false)
+      setForm(formFromBook(book))
+    } else if (!editing) {
+      setForm(formFromBook(book))
+    }
   }
 
   function updateField<K extends keyof BookFormState>(
@@ -139,13 +146,17 @@ export function BookDetail({
       Borrowed: form.Borrowed,
     }
 
-    if (form.StartDate) payload.StartDate = form.StartDate
-    if (form.EndDate) payload.EndDate = form.EndDate
+    if (form.StartDate || book.StartDate) payload.StartDate = form.StartDate
+    if (form.EndDate || book.EndDate) payload.EndDate = form.EndDate
 
     if (form.Borrowed === "Yes") {
       payload.BorrowedBy = form.BorrowedBy.trim()
-      if (form.BorrowedOn) payload.BorrowedOn = form.BorrowedOn
-      if (form.BorrowedUntil) payload.BorrowedUntil = form.BorrowedUntil
+      if (form.BorrowedOn || book.BorrowedOn) {
+        payload.BorrowedOn = form.BorrowedOn
+      }
+      if (form.BorrowedUntil || book.BorrowedUntil) {
+        payload.BorrowedUntil = form.BorrowedUntil
+      }
     }
 
     setPending(true)

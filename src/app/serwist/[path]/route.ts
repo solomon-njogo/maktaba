@@ -9,18 +9,7 @@ const revision =
 
 export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } =
   createSerwistRoute({
-    additionalPrecacheEntries: [
-      { url: "/", revision },
-      { url: "/add", revision },
-      { url: "/library", revision },
-      { url: "/tbr", revision },
-      { url: "/reading", revision },
-      { url: "/done", revision },
-      { url: "/to-buy", revision },
-      { url: "/borrowed", revision },
-      { url: "/pending", revision },
-      { url: "/design-system", revision },
-    ],
+    additionalPrecacheEntries: [{ url: "/", revision }],
     swSrc: "app/sw.ts",
     useNativeEsbuild: true,
     esbuildOptions: {

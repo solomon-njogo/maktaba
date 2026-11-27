@@ -9,6 +9,8 @@ import {
 } from "@/lib/server/book.service"
 import { jsonError } from "@/lib/server/route-response"
 
+export const maxDuration = 30
+
 type BookContext = { params: Promise<{ isbn: string }> }
 
 export async function GET(_request: Request, context: BookContext) {

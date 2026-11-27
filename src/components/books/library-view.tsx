@@ -6,10 +6,9 @@ import { SearchIcon, XIcon } from "lucide-react"
 import type { BookEmptyVariant } from "@/components/books/book-empty"
 import { BookEmpty } from "@/components/books/book-empty"
 import { LibraryBookCard } from "@/components/books/library-book-card"
-import { LibraryShelfFilters } from "@/components/books/library-shelf-filters"
 import { useLibrary } from "@/components/books/library-provider"
 import { PageShell } from "@/components/layout/page-shell"
-import { useAppPath } from "@/components/offline/app-path"
+import { AppLink } from "@/components/offline/app-link"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   InputGroup,
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import type { ListBooksFilters } from "@/lib/api/books"
-import type { LocalBook } from "@/lib/offline/types"
 import {
   libraryViewCounts,
   libraryViewForFilters,
@@ -66,8 +64,6 @@ export function LibraryView({
   description: string
   filters?: ListBooksFilters
   emptyVariant?: BookEmptyVariant
-  /** @deprecated Count is shown in the subtitle. */
-  showTotal?: boolean
 }) {
   const { books: allBooks } = useLibrary()
   const { books, ready } = useLibrary(filters)
@@ -99,9 +95,6 @@ export function LibraryView({
             {description}
           </p>
         </div>
-        {showTotal ? (
-          <LibraryTotalCard count={books.length} ready={ready} />
-        ) : null}
         <nav
           aria-label="Filter library by status"
           className="-mx-page-x flex gap-1.5 overflow-x-auto px-page-x py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0"

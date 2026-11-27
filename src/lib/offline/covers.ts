@@ -1,5 +1,7 @@
 import type { FormattedBookResponse } from "@/types/books"
 
+const warmedUrls = new Set<string>()
+
 function coverUrls(books: FormattedBookResponse[]) {
   const urls = new Set<string>()
   for (const book of books) {
@@ -13,6 +15,8 @@ export function warmCoverCache(books: FormattedBookResponse[]) {
   if (typeof window === "undefined" || typeof Image === "undefined") return
   const urls = coverUrls(books)
   for (const url of urls) {
+    if (warmedUrls.has(url)) continue
+    warmedUrls.add(url)
     const image = new Image()
     image.referrerPolicy = "no-referrer"
     image.src = url

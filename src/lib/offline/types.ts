@@ -16,12 +16,19 @@ export type OutboxOp = {
   payload?: BookCreatePayload
   createdAt: number
   queuedAt?: number
+  attempts?: number
+  lastAttemptAt?: number
+  lastError?: string
+  lastStatus?: number
+  nextRetryAt?: number
+  paused?: boolean
 }
 
 export type SyncStatus = {
   online: boolean
   syncing: boolean
   pendingCount: number
+  pausedCount?: number
   lastSyncedAt?: number
   lastError?: string
 }
