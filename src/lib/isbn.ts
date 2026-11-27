@@ -1,5 +1,5 @@
 export function cleanIsbnString(isbn: string): string {
-  return isbn.replace(/[-\s]/g, "")
+  return isbn.replace(/[-\s]/g, "").toUpperCase()
 }
 
 const ISBN_10 = /^[0-9]{9}[0-9Xx]$/
